@@ -2,7 +2,7 @@
 
 Turn a raw startup idea plus a short founder questionnaire into a **complete, actionable business plan**.
 
-Inspired by AutoResearchClaw, but aimed at founders and operators instead of academic publishing. The repo now behaves like a staged pipeline with a multi-agent critique system, checkpoint/resume support, and structured competitor mapping.
+Inspired by AutoResearchClaw, but aimed at founders and operators instead of academic publishing. The repo now behaves like a staged pipeline with a multi-agent critique system, checkpoint/resume support, structured competitor mapping, and Obsidian export with MOC + canvas.
 
 ## What it does
 
@@ -28,6 +28,7 @@ And generates:
 - `exports/competitor_matrix.csv`
 - `exports/competitor_matrix.md`
 - `exports/gtm_experiments.md`
+- novo vault Obsidian com notas `.md` linkadas, `MOC.md` e `.canvas`
 - `stages/`
 - `run_summary.json`
 
@@ -76,10 +77,23 @@ The pipeline now creates a structured competitor mapping stage and exports:
 - `exports/competitor_matrix.csv`
 - `exports/competitor_matrix.md`
 
-If live web research is unavailable, it falls back to a structured matrix with:
-- status quo
-- indirect alternatives
-- direct horizontal tools
+## Obsidian export
+The project now supports:
+- export manual de um run para um novo vault
+- export automático ao final do `run`
+- `MOC.md` com trilhas de navegação
+- `.canvas` para visualização gráfica
+- links cruzados mais ricos entre plano, debate, concorrência, pesquisa e financeiro
+
+### Export manual
+```bash
+businessclaw export-obsidian --run-dir artifacts/my-run --vault-dir exports/obsidian/my-run-vault
+```
+
+### Export automático ao final do run
+```bash
+businessclaw run --config config.businessclaw.yaml --answers questionnaire.json --export-obsidian --obsidian-vault-dir exports/obsidian/my-run-vault
+```
 
 ## Installation
 ```bash
@@ -108,11 +122,6 @@ With resume:
 businessclaw run --config config.businessclaw.yaml --answers questionnaire.json --output artifacts/my-run --resume
 ```
 
-Export para um novo vault do Obsidian:
-```bash
-businessclaw export-obsidian --run-dir artifacts/my-run --vault-dir exports/obsidian/my-run-vault
-```
-
 ## Offline fallback mode
 If no `OPENAI_API_KEY` is configured, the pipeline still runs in deterministic fallback mode and still emits:
 - persona critiques
@@ -121,6 +130,7 @@ If no `OPENAI_API_KEY` is configured, the pipeline still runs in deterministic f
 - GTM pack
 - financial exports
 - checkpoint metadata
+- Obsidian-ready artifacts
 
 ## OpenClaw-native workflow
 See:

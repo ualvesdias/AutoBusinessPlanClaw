@@ -76,7 +76,18 @@ def cmd_run(args: argparse.Namespace) -> int:
     console.print(f"- {run_dir / 'exports' / 'competitor_matrix.csv'}")
     console.print(f"- {run_dir / 'exports' / 'financial_model.csv'}")
     console.print(f"- {run_dir / 'exports' / 'gtm_experiments.md'}")
+
+    if args.export_obsidian:
+        vault_dir = Path(args.obsidian_vault_dir) if args.obsidian_vault_dir else Path(run_dir) / 'exports' / 'obsidian-vault'
+        vault_dir = export_run_to_obsidian(run_dir, vault_dir)
+        console.print(f"- Vault Obsidian: {vault_dir}")
+        console.print(f"- {_display(vault_dir / 'Home.md')}")
+        console.print(f"- {_display(vault_dir / '00 Overview' / 'MOC.md')}")
     return 0
+
+
+def _display(path: Path) -> str:
+    return str(path)
 
 
 def cmd_export_obsidian(args: argparse.Namespace) -> int:
@@ -84,6 +95,7 @@ def cmd_export_obsidian(args: argparse.Namespace) -> int:
     console.print(f"Vault Obsidian exportado para [bold]{vault_dir}[/bold]")
     console.print(f"- {vault_dir / 'Home.md'}")
     console.print(f"- {vault_dir / '00 Overview' / 'Project Summary.md'}")
+    console.print(f"- {vault_dir / '00 Overview' / 'MOC.md'}")
     console.print(f"- {vault_dir / '04 Debate' / 'Tenth Man.md'}")
     return 0
 
@@ -100,6 +112,8 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--answers", "-a", default="questionnaire.json")
     run_p.add_argument("--output", "-o")
     run_p.add_argument("--resume", action="store_true", help="Retomar um run existente usando checkpoint.json")
+    run_p.add_argument("--export-obsidian", action="store_true", help="Exportar automaticamente para um vault do Obsidian ao final do run")
+    run_p.add_argument("--obsidian-vault-dir", help="Diretório do vault do Obsidian para export automático")
 
     obs_p = sub.add_parser("export-obsidian", help="Exportar um run para um novo vault do Obsidian")
     obs_p.add_argument("--run-dir", required=True)

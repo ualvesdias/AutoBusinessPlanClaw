@@ -11,6 +11,7 @@ business:
   idea: Demo idea
 runtime:
   critique_rounds: 3
+  pro_agent_count: 9
 """,
         encoding="utf-8",
     )
@@ -18,6 +19,7 @@ runtime:
     assert cfg.project.name == "demo"
     assert cfg.business.idea == "Demo idea"
     assert cfg.runtime.critique_rounds == 3
+    assert cfg.runtime.pro_agent_count == 9
 
 
 def test_load_questionnaire(tmp_path):

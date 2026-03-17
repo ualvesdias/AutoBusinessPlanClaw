@@ -25,6 +25,7 @@ class RuntimeConfig:
     max_web_results: int = 8
     allow_web_research: bool = True
     critique_rounds: int = 2
+    pro_agent_count: int = 9
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,8 @@ class Stage(str, Enum):
     MARKET_RESEARCH = "market_research"
     SYNTHESIS = "synthesis"
     PLAN_DRAFT = "plan_draft"
+    PERSONA_CRITIQUE = "persona_critique"
+    TENTH_MAN = "tenth_man"
     CRITIQUE = "critique"
     REVISION = "revision"
     FINANCIALS = "financials"

@@ -13,6 +13,7 @@ business:
 runtime:
   allow_web_research: false
   critique_rounds: 1
+  pro_agent_count: 9
 output:
   root: artifacts
 """,
@@ -40,4 +41,7 @@ answers:
     run_dir = Pipeline(cfg).run(answers, web_search_fn=None, output_dir=tmp_path / "run")
     assert (run_dir / "business_plan.md").exists()
     assert (run_dir / "exports" / "financial_model.csv").exists()
-    assert (run_dir / "stages" / "plan_draft.md").exists()
+    assert (run_dir / "stages" / "persona_critique.json").exists()
+    assert (run_dir / "stages" / "tenth_man.json").exists()
+    assert (run_dir / "persona_critiques.json").exists()
+    assert (run_dir / "tenth_man_report.json").exists()

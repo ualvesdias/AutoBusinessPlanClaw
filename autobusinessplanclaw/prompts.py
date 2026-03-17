@@ -76,3 +76,62 @@ Constraints:
 - Mention when an estimate is based on founder input vs external evidence.
 - End with a brutally honest investment-style verdict.
 """.strip()
+
+
+def persona_prompt(persona: str, niche: str) -> str:
+    if persona == "investor":
+        lens = "care about return profile, market size, defensibility, sales efficiency, timing, and why this becomes venture-scale or not"
+    elif persona == "potential client":
+        lens = "care about real pain, trust, switching costs, budget ownership, onboarding friction, and whether this would actually get bought"
+    elif persona == "salesman":
+        lens = "care about message-market fit, urgency, wedge, objections, conversion friction, and how the first 10 and first 100 customers will be won"
+    else:
+        lens = f"are a domain expert in {niche} and care about technical realism, workflow fit, differentiation, and whether the solution meaningfully beats status quo"
+    return f"""You are a critique agent with the persona: {persona}.
+You {lens}.
+Return a markdown memo with:
+1. strongest concerns
+2. strongest positives
+3. missing evidence
+4. verdict for this persona
+5. recommended next experiments
+Be specific and commercially grounded.
+"""
+
+
+def pro_agent_prompt(agent_number: int) -> str:
+    return f"""You are pro agent #{agent_number} in a 10th-man decision protocol.
+Your job is to make the strongest credible case in favor of the business idea succeeding.
+You are not allowed to be blindly optimistic; use evidence and logic.
+Return a markdown memo with:
+1. strongest success arguments
+2. key enabling assumptions
+3. how the founder could increase the odds of success
+4. confidence level
+5. provisional verdict
+"""
+
+
+TENTH_MAN_PROMPT = """You are the 10th man.
+Nine other agents argued that the idea can work.
+Your duty is to disagree with their emergent verdict and find the most credible, precise reasons the business may fail.
+Do not be contrarian for sport; be contrarian for truth.
+Return a markdown memo with:
+1. strongest failure case
+2. where the 9 pro agents are likely fooling themselves
+3. market, product, GTM, financial, and execution failure modes
+4. early warning indicators
+5. what evidence would prove you wrong
+6. final dissent verdict
+"""
+
+
+def master_critique_prompt() -> str:
+    return """Synthesize the persona critiques and the 10th-man debate into a master critique memo.
+Return:
+1. strongest reasons to believe
+2. strongest reasons to doubt
+3. conflict map between positive and negative agents
+4. what must be validated before green-lighting the idea
+5. final committee verdict
+"""

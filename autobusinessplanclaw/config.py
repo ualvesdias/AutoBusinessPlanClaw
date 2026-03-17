@@ -48,6 +48,7 @@ def load_config(path: str | Path) -> ABCConfig:
             max_web_results=int(runtime.get("max_web_results", 8)),
             allow_web_research=bool(runtime.get("allow_web_research", True)),
             critique_rounds=int(runtime.get("critique_rounds", 2)),
+            pro_agent_count=int(runtime.get("pro_agent_count", 9)),
         ),
         llm=LLMConfig(
             base_url=str(llm.get("base_url", "https://api.openai.com/v1")),

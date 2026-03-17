@@ -36,6 +36,18 @@ Minimum response back to the founder:
 - Prefer narrower ICPs and narrower MVPs in early versions.
 - If evidence is weak, recommend interviews and pilots instead of pretending certainty.
 
+## Multi-agent critique expectation
+Before treating the plan as strong, review:
+1. `persona_critiques.json`
+2. `tenth_man_report.json`
+3. `critiques.json`
+4. `business_plan.md`
+
+The `tenth_man_report.json` file is especially important because it contains:
+- 9 pro-agent cases for success
+- 1 dissenter case for failure
+- a master critique synthesis
+
 ## Good follow-up automations
 - set a reminder to review the plan after 10 customer interviews
 - schedule a weekly GTM review
@@ -45,10 +57,12 @@ Minimum response back to the founder:
 ## Recommended artifact review order
 1. `run_summary.json`
 2. `synthesis.json`
-3. `critiques.json`
-4. `business_plan.md`
-5. `exports/financial_model.csv`
-6. `exports/gtm_experiments.md`
+3. `persona_critiques.json`
+4. `tenth_man_report.json`
+5. `critiques.json`
+6. `business_plan.md`
+7. `exports/financial_model.csv`
+8. `exports/gtm_experiments.md`
 
 ## Notes
 - If `OPENAI_API_KEY` is not available, the tool still runs in fallback mode.

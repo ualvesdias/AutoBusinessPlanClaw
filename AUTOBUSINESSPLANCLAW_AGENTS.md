@@ -12,6 +12,14 @@ Turn a founder idea into a rigorous business plan, not fluffy startup fanfiction
 4. Run `businessclaw run --config ... --answers ...`.
 5. Return the generated artifact path and summarize the business verdict.
 
+## Multi-agent critique expectation
+The pipeline now includes:
+- 4 persona critics: `investor`, `potential client`, `salesman`, `expert`
+- 9 pro agents arguing for success
+- 1 dissenting 10th-man agent arguing for failure
+
+The 10th-man output is not decorative. It should directly inform the risk section and any follow-up validation plan.
+
 ## Preferred OpenClaw flow
 - Use the main session for discovery questions.
 - Use an ACP/session run if you want isolated long-running generation.

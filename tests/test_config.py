@@ -12,9 +12,12 @@ business:
 runtime:
   critique_rounds: 3
   pro_agent_count: 9
+  parallel_workers: 6
+  prompt_evidence_limit: 80
 llm:
   provider: openclaw-http
   timeout_seconds: 20
+  max_completion_tokens: 12000
 """,
         encoding="utf-8",
     )
@@ -23,8 +26,11 @@ llm:
     assert cfg.business.idea == "Demo idea"
     assert cfg.runtime.critique_rounds == 3
     assert cfg.runtime.pro_agent_count == 9
+    assert cfg.runtime.parallel_workers == 6
+    assert cfg.runtime.prompt_evidence_limit == 80
     assert cfg.llm.provider == "openclaw-http"
     assert cfg.llm.timeout_seconds == 20
+    assert cfg.llm.max_completion_tokens == 12000
 
 
 def test_load_questionnaire(tmp_path):

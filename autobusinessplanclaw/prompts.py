@@ -10,6 +10,8 @@ Rules:
 - If evidence is thin, say so clearly and propose validation steps.
 - Avoid vague consultant filler.
 - Produce execution-ready content.
+- Prefer depth over brevity when the evidence supports deeper analysis.
+- Do not arbitrarily truncate analysis; cover the material completely.
 """
 
 CRITIC_PROMPT = """You are the internal investment committee.
@@ -74,6 +76,7 @@ Constraints:
 - Use bullet points and short tables only when they improve clarity.
 - Whenever you estimate a market number, show the formula or logic.
 - Mention when an estimate is based on founder input vs external evidence.
+- Be comprehensive: include nuance, edge cases, counterarguments, and research gaps.
 - End with a brutally honest investment-style verdict.
 """.strip()
 

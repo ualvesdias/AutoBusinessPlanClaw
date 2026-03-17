@@ -49,6 +49,10 @@ def load_config(path: str | Path) -> ABCConfig:
             allow_web_research=bool(runtime.get("allow_web_research", True)),
             critique_rounds=int(runtime.get("critique_rounds", 2)),
             pro_agent_count=int(runtime.get("pro_agent_count", 9)),
+            parallel_workers=int(runtime.get("parallel_workers", 4)),
+            prompt_evidence_limit=int(runtime.get("prompt_evidence_limit", 60)),
+            persist_full_prompts=bool(runtime.get("persist_full_prompts", True)),
+            exhaustive_mode=bool(runtime.get("exhaustive_mode", True)),
         ),
         llm=LLMConfig(
             provider=str(llm.get("provider", "auto")),
@@ -57,6 +61,7 @@ def load_config(path: str | Path) -> ABCConfig:
             model=str(llm.get("model", "gpt-4o-mini")),
             temperature=float(llm.get("temperature", 0.2)),
             timeout_seconds=int(llm.get("timeout_seconds", 45)),
+            max_completion_tokens=int(llm.get("max_completion_tokens", 16000)),
             openclaw_base_url=str(llm.get("openclaw_base_url", "http://127.0.0.1:18789/v1")),
             openclaw_api_key_env=str(llm.get("openclaw_api_key_env", "OPENCLAW_GATEWAY_TOKEN")),
             openclaw_model=str(llm.get("openclaw_model", "openclaw:main")),

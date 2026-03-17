@@ -114,6 +114,7 @@ class OpenAICompatibleClient:
                 json={
                     "model": model,
                     "temperature": self.config.temperature,
+                    "max_completion_tokens": self.config.max_completion_tokens,
                     "messages": [
                         {"role": "system", "content": system},
                         {"role": "user", "content": user},

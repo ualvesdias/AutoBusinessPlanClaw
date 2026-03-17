@@ -14,6 +14,8 @@ runtime:
   allow_web_research: false
   critique_rounds: 1
   pro_agent_count: 9
+llm:
+  provider: none
 output:
   root: artifacts
 """,
@@ -48,6 +50,8 @@ answers:
     assert (run_dir / "persona_critiques.json").exists()
     assert (run_dir / "tenth_man_report.json").exists()
     assert (run_dir / "checkpoint.json").exists()
+    assert (run_dir / "prompts" / "plan_draft.prompt.json").exists()
+    assert (run_dir / "prompts" / "plan_draft.response.json").exists()
 
 
 def test_pipeline_resume_uses_existing_run(tmp_path):
@@ -61,6 +65,8 @@ business:
 runtime:
   allow_web_research: false
   critique_rounds: 1
+llm:
+  provider: none
 output:
   root: artifacts
 """,

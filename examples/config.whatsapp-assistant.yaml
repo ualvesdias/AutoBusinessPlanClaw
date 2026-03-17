@@ -21,9 +21,15 @@ llm:
   api_key_env: "OPENAI_API_KEY"
   model: "gpt-4o-mini"
   temperature: 0.2
-  timeout_seconds: 12
+  timeout_seconds: 30
+  max_completion_tokens: 16000
   openclaw_base_url: "http://127.0.0.1:18789/v1"
   openclaw_api_key_env: "OPENCLAW_GATEWAY_TOKEN"
+  openclaw_model: "openclaw:main"
+
+output:
+  root: "artifacts"
+AY_TOKEN"
   openclaw_model: "openclaw:main"
 
 output:

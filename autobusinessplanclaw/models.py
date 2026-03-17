@@ -26,6 +26,10 @@ class RuntimeConfig:
     allow_web_research: bool = True
     critique_rounds: int = 2
     pro_agent_count: int = 9
+    parallel_workers: int = 4
+    prompt_evidence_limit: int = 60
+    persist_full_prompts: bool = True
+    exhaustive_mode: bool = True
 
 
 @dataclass(frozen=True)
@@ -36,6 +40,7 @@ class LLMConfig:
     model: str = "gpt-4o-mini"
     temperature: float = 0.2
     timeout_seconds: int = 45
+    max_completion_tokens: int = 16000
     openclaw_base_url: str = "http://127.0.0.1:18789/v1"
     openclaw_api_key_env: str = "OPENCLAW_GATEWAY_TOKEN"
     openclaw_model: str = "openclaw:main"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
@@ -40,8 +41,11 @@ class Pipeline:
         run_dir.mkdir(parents=True, exist_ok=True)
         stages_dir = run_dir / "stages"
         exports_dir = run_dir / "exports"
+        prompts_dir = run_dir / "prompts"
         stages_dir.mkdir(exist_ok=True)
         exports_dir.mkdir(exist_ok=True)
+        prompts_dir.mkdir(exist_ok=True)
+        self.current_run_dir = run_dir
         checkpoint_path = run_dir / "checkpoint.json"
 
         state = self._load_checkpoint(checkpoint_path) if resume else {"completed_stages": []}
@@ -69,11 +73,20 @@ class Pipeline:
             raw_research = []
             evidence = []
             if self.config.runtime.allow_web_research and web_search_fn is not None:
-                for query in queries:
-                    results = web_search_fn(query=query, count=self.config.runtime.max_web_results)
-                    raw_research.append({"query": query, "results": results})
-                    for item in results:
-                        evidence.append(EvidenceItem(**item))
+                with ThreadPoolExecutor(max_workers=self.config.runtime.parallel_workers) as executor:
+                    future_map = {
+                        executor.submit(web_search_fn, query=query, count=self.config.runtime.max_web_results): query
+                        for query in queries
+                    }
+                    for future in as_completed(future_map):
+                        query = future_map[future]
+                        try:
+                            results = future.result()
+                        except Exception:
+                            results = []
+                        raw_research.append({"query": query, "results": results})
+                        for item in results:
+                            evidence.append(EvidenceItem(**item))
             if not evidence:
                 evidence = fallback_evidence(self.config.business.idea, answers)
             self._write_stage(stages_dir, Stage.MARKET_RESEARCH, {
@@ -179,19 +192,28 @@ class Pipeline:
         competitors: list[dict[str, str]] = []
         raw: list[dict[str, Any]] = []
         if self.config.runtime.allow_web_research and web_search_fn is not None:
-            for query in queries:
-                results = web_search_fn(query=query, count=min(5, self.config.runtime.max_web_results))
-                raw.append({"query": query, "results": results})
-                for idx, item in enumerate(results[:2], start=1):
-                    competitors.append({
-                        "name": item.get("title", f"Concorrente {idx}"),
-                        "type": "direct" if idx == 1 else "indirect",
-                        "positioning": item.get("snippet", "Posicionamento não extraído")[:180],
-                        "strengths": "Marca / presença de mercado",
-                        "weaknesses": "Necessita validação específica para o ICP",
-                        "pricing": "Desconhecido",
-                        "evidence": item.get("url", ""),
-                    })
+            with ThreadPoolExecutor(max_workers=self.config.runtime.parallel_workers) as executor:
+                future_map = {
+                    executor.submit(web_search_fn, query=query, count=min(5, self.config.runtime.max_web_results)): query
+                    for query in queries
+                }
+                for future in as_completed(future_map):
+                    query = future_map[future]
+                    try:
+                        results = future.result()
+                    except Exception:
+                        results = []
+                    raw.append({"query": query, "results": results})
+                    for idx, item in enumerate(results[:3], start=1):
+                        competitors.append({
+                            "name": item.get("title", f"Concorrente {idx}"),
+                            "type": "direct" if idx == 1 else "indirect",
+                            "positioning": item.get("snippet", "Posicionamento não extraído")[:400],
+                            "strengths": "Marca / presença de mercado",
+                            "weaknesses": "Necessita validação específica para o ICP",
+                            "pricing": "Desconhecido",
+                            "evidence": item.get("url", ""),
+                        })
         if not competitors:
             competitors = fallback_competitors(answers)
         deduped: list[dict[str, str]] = []
@@ -208,7 +230,7 @@ class Pipeline:
         }
 
     def _generate_plan(self, answers, evidence, synthesis, persona_critiques, tenth_man_report) -> str:
-        evidence_lines = [f"{item.title} — {item.url} — {item.snippet}" for item in evidence[:20]]
+        evidence_lines = [f"{item.title} — {item.url} — {item.snippet}" for item in evidence[: self.config.runtime.prompt_evidence_limit]]
         prompt = planning_prompt(
             self.config.business.idea,
             answers,
@@ -220,12 +242,17 @@ class Pipeline:
         prompt += "\n\nPersona critiques:\n" + json.dumps(persona_critiques, indent=2, ensure_ascii=False)
         prompt += "\n\n10th-man debate:\n" + json.dumps(tenth_man_report, indent=2, ensure_ascii=False)
         prompt += "\n\nUse the 10th-man material as core input for the risk section."
+        self._record_prompt("plan_draft", SYSTEM_PROMPT, prompt)
         try:
             if self.client.is_configured():
-                return self.client.complete(SYSTEM_PROMPT, prompt)
-        except LLMError:
-            pass
-        return self._fallback_plan(answers, evidence, synthesis, persona_critiques, tenth_man_report)
+                result = self.client.complete(SYSTEM_PROMPT, prompt)
+                self._record_response("plan_draft", result)
+                return result
+        except LLMError as exc:
+            self._record_response("plan_draft", f"LLM_ERROR: {exc}")
+        result = self._fallback_plan(answers, evidence, synthesis, persona_critiques, tenth_man_report)
+        self._record_response("plan_draft", result)
+        return result
 
     def _critique_plan(self, plan, synthesis, persona_critiques, tenth_man_report, round_idx: int) -> str:
         critique_input = (
@@ -247,26 +274,45 @@ class Pipeline:
             f"\n\nPersona critiques:\n{json.dumps(persona_critiques, indent=2, ensure_ascii=False)}"
             f"\n\n10th-man debate:\n{json.dumps(tenth_man_report, indent=2, ensure_ascii=False)}"
         )
+        stage_name = f"revision_round_{round_idx}"
+        self._record_prompt(stage_name, REVISION_PROMPT, revision_input)
         try:
             if self.client.is_configured():
-                return self.client.complete(REVISION_PROMPT, revision_input)
-        except LLMError:
-            pass
-        return plan + "\n\n---\n\n## Internal critique adjustments\n\n" + critique
+                result = self.client.complete(REVISION_PROMPT, revision_input)
+                self._record_response(stage_name, result)
+                return result
+        except LLMError as exc:
+            self._record_response(stage_name, f"LLM_ERROR: {exc}")
+        result = plan + "\n\n---\n\n## Internal critique adjustments\n\n" + critique
+        self._record_response(stage_name, result)
+        return result
 
     def _run_persona_critiques(self, answers, evidence, synthesis) -> dict[str, Any]:
         niche = self._infer_niche(answers)
         results = {}
-        for persona in self.PERSONAS:
-            memo = self._run_persona_agent(persona, niche, answers, evidence, synthesis)
-            results[persona] = {"persona": persona, "memo": memo}
+        with ThreadPoolExecutor(max_workers=min(len(self.PERSONAS), self.config.runtime.parallel_workers)) as executor:
+            future_map = {
+                executor.submit(self._run_persona_agent, persona, niche, answers, evidence, synthesis): persona
+                for persona in self.PERSONAS
+            }
+            for future in as_completed(future_map):
+                persona = future_map[future]
+                memo = future.result()
+                results[persona] = {"persona": persona, "memo": memo}
         return results
 
     def _run_tenth_man(self, answers, evidence, synthesis, persona_critiques) -> dict[str, Any]:
         pro_agents = []
-        for idx in range(1, self.config.runtime.pro_agent_count + 1):
-            memo = self._run_pro_agent(idx, answers, evidence, synthesis, persona_critiques)
-            pro_agents.append({"agent": f"pro_{idx}", "memo": memo})
+        with ThreadPoolExecutor(max_workers=min(self.config.runtime.pro_agent_count, self.config.runtime.parallel_workers)) as executor:
+            future_map = {
+                executor.submit(self._run_pro_agent, idx, answers, evidence, synthesis, persona_critiques): idx
+                for idx in range(1, self.config.runtime.pro_agent_count + 1)
+            }
+            for future in as_completed(future_map):
+                idx = future_map[future]
+                memo = future.result()
+                pro_agents.append({"agent": f"pro_{idx}", "memo": memo})
+        pro_agents.sort(key=lambda x: x["agent"])
         tenth_memo = self._run_tenth_man_agent(answers, evidence, synthesis, persona_critiques, pro_agents)
         master = self._run_master_critique(persona_critiques, pro_agents, tenth_memo, synthesis)
         return {"pro_agents": pro_agents, "tenth_man": {"agent": "tenth_man", "memo": tenth_memo}, "master_critique": master}
@@ -308,12 +354,19 @@ class Pipeline:
             + "\n\n10th man:\n" + tenth_memo
             + "\n\nSynthesis:\n" + json.dumps(synthesis, indent=2, ensure_ascii=False)
         )
+        stage_name = "master_critique"
+        system = master_critique_prompt()
+        self._record_prompt(stage_name, system, prompt)
         try:
             if self.client.is_configured():
-                return self.client.complete(master_critique_prompt(), prompt)
-        except LLMError:
-            pass
-        return self._fallback_master_critique(persona_critiques, tenth_memo)
+                result = self.client.complete(system, prompt)
+                self._record_response(stage_name, result)
+                return result
+        except LLMError as exc:
+            self._record_response(stage_name, f"LLM_ERROR: {exc}")
+        result = self._fallback_master_critique(persona_critiques, tenth_memo)
+        self._record_response(stage_name, result)
+        return result
 
     def _build_synthesis(self, answers, evidence, competition) -> dict[str, Any]:
         return {
@@ -674,6 +727,37 @@ CONDITIONAL GO
             f"Evidence:\n{json.dumps(evidence_lines, indent=2, ensure_ascii=False)}\n\n"
             f"Synthesis:\n{json.dumps(synthesis, indent=2, ensure_ascii=False)}"
         )
+
+    def _record_prompt(self, stage_name: str, system: str, user: str) -> None:
+        if not getattr(self.config.runtime, "persist_full_prompts", True):
+            return
+        run_dir = getattr(self, "current_run_dir", None)
+        if not run_dir:
+            return
+        prompt_dir = Path(run_dir) / "prompts"
+        prompt_dir.mkdir(exist_ok=True)
+        payload = {
+            "stage": stage_name,
+            "system": system,
+            "user": user,
+            "recorded_at": datetime.now(UTC).isoformat(),
+        }
+        (prompt_dir / f"{stage_name}.prompt.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    def _record_response(self, stage_name: str, response_text: str) -> None:
+        if not getattr(self.config.runtime, "persist_full_prompts", True):
+            return
+        run_dir = getattr(self, "current_run_dir", None)
+        if not run_dir:
+            return
+        prompt_dir = Path(run_dir) / "prompts"
+        prompt_dir.mkdir(exist_ok=True)
+        payload = {
+            "stage": stage_name,
+            "response": response_text,
+            "recorded_at": datetime.now(UTC).isoformat(),
+        }
+        (prompt_dir / f"{stage_name}.response.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
     def _safe_read_json(self, path: Path, default):
         if not path.exists():

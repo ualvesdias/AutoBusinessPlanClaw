@@ -522,19 +522,110 @@ CONDITIONAL GO
 """
 
     def _fallback_persona_memo(self, persona, niche, answers):
+        problem = answers['problem']
+        icp = answers['icp']
+        current = answers['current_solution']
+        why_now = answers['why_now']
+        advantage = answers['advantage']
+        mvp = answers['mvp']
+        first_10 = answers['first_10_customers']
         if persona == "investor":
-            return "# Investor memo\n- Strongest concerns: defensibility, sales efficiency, and whether the wedge can grow into a large-enough market.\n- Strongest positives: founder-domain fit and a painful problem with recurring value.\n- Missing evidence: market size proof, sales cycle data, and retention signals.\n- Verdict: CONDITIONAL GO.\n- Next experiments: validate ACV, pilot conversion, and upsell path.\n"
+            return (
+                f"# Investor memo\n"
+                f"- Strongest concerns: o mercado pode até sentir a dor `{problem}`, mas ainda faltar evidência de ticket, retenção e eficiência comercial no ICP `{icp}`.\n"
+                f"- Strongest positives: o founder tem uma tese de vantagem defensável (`{advantage}`) e existe uma alternativa ruim/status quo (`{current}`).\n"
+                f"- Missing evidence: payback do canal inicial, taxa de conversão para pago e potencial de expansão além do MVP `{mvp}`.\n"
+                f"- Verdict: CONDITIONAL GO.\n"
+                f"- Next experiments: validar willingness-to-pay, churn inicial e economics dos primeiros 10 clientes via `{first_10}`.\n"
+            )
         if persona == "potential client":
-            return f"# Potential client memo\n- Strongest concerns: switching cost, trust, integration friction, and whether this is must-have or just nice-to-have.\n- Strongest positives: clear pain around {answers['problem']}.\n- Missing evidence: budget owner, onboarding burden, and measurable ROI.\n- Verdict: interested but skeptical.\n- Next experiments: customer interviews, pilot design, and ROI promise testing.\n"
+            return (
+                f"# Potential client memo\n"
+                f"- Strongest concerns: quero saber se `{mvp}` realmente resolve meu fluxo sem me gerar retrabalho, especialmente porque hoje eu já faço `{current}`.\n"
+                f"- Strongest positives: a proposta ataca uma dor operacional concreta: `{problem}`.\n"
+                f"- Missing evidence: tempo economizado por semana, confiabilidade da automação e clareza de suporte/onboarding.\n"
+                f"- Verdict: interessado, mas só pago se o ganho de tempo for óbvio.\n"
+                f"- Next experiments: pilotos curtos com métrica de tempo poupado e redução de fricção operacional.\n"
+            )
         if persona == "salesman":
-            return "# Sales memo\n- Strongest concerns: the message may still be too broad and the buyer may not feel urgency fast enough.\n- Strongest positives: founder-led outbound is plausible for early traction.\n- Missing evidence: response rates, objection patterns, and a crisp wedge.\n- Verdict: sellable if narrowed.\n- Next experiments: outbound script testing and objection logging.\n"
-        return f"# Expert memo ({niche})\n- Strongest concerns: technical differentiation may be thinner than it looks and operational trust matters.\n- Strongest positives: the problem is real within the niche and current tooling often overproduces noise.\n- Missing evidence: workflow fit and measurable superiority over current alternatives.\n- Verdict: technically plausible, commercially unproven.\n- Next experiments: benchmark the MVP against status quo workflows.\n"
+            return (
+                f"# Sales memo\n"
+                f"- Strongest concerns: a mensagem ainda pode soar ampla demais para `{icp}` e a urgência precisa estar ancorada em `{why_now}`.\n"
+                f"- Strongest positives: existe um wedge comercial claro se o pitch ficar centrado em economia de tempo e eliminação de trabalho manual.\n"
+                f"- Missing evidence: objeções dominantes, copy que converte e taxa real de indicação a partir de `{first_10}`.\n"
+                f"- Verdict: vendável se a promessa comercial for extremamente específica.\n"
+                f"- Next experiments: testar 3 versões de pitch, registrar objeções e comparar conversão por sub-ICP.\n"
+            )
+        return (
+            f"# Expert memo ({niche})\n"
+            f"- Strongest concerns: no nicho {niche}, a solução precisa se encaixar no fluxo real do usuário e não apenas parecer elegante no papel.\n"
+            f"- Strongest positives: a tese de produto parece pragmaticamente conectada ao problema `{problem}`.\n"
+            f"- Missing evidence: benchmark contra status quo (`{current}`), cobertura de edge cases e estabilidade operacional do MVP `{mvp}`.\n"
+            f"- Verdict: tecnicamente plausível, mas ainda precisa provar aderência de fluxo.\n"
+            f"- Next experiments: validar os 5 cenários operacionais mais críticos do nicho e comparar erro humano vs automação.\n"
+        )
 
     def _fallback_pro_memo(self, idx, answers):
-        return f"# Pro agent {idx}\n1. Strongest success arguments\n- The problem is painful and frequent.\n- The founder has a believable advantage: {answers['advantage']}.\n- A narrow MVP exists: {answers['mvp']}.\n\n2. Key enabling assumptions\n- The ICP will pay if ROI is visible.\n- Sales can start with founder-led outbound.\n\n3. How to increase odds of success\n- Narrow the wedge and prove value quickly.\n\n4. Confidence level\nModerate\n\n5. Provisional verdict\nCONDITIONAL GO\n"
+        themes = [
+            "frequência da dor",
+            "economia de tempo",
+            "vantagem do founder",
+            "clareza do MVP",
+            "canal inicial de aquisição",
+            "potencial de indicação",
+            "adequação de preço",
+            "simplicidade operacional",
+            "aprendizado rápido com pilotos",
+        ]
+        theme = themes[(idx - 1) % len(themes)]
+        lines = {
+            "frequência da dor": f"- O problema `{answers['problem']}` é recorrente e tende a gerar fricção semanal no ICP.",
+            "economia de tempo": f"- O ganho econômico é legível porque `{answers['payment_reason']}`.",
+            "vantagem do founder": f"- O founder traz uma vantagem concreta: `{answers['advantage']}`.",
+            "clareza do MVP": f"- Há um wedge inicial claro: `{answers['mvp']}`.",
+            "canal inicial de aquisição": f"- Existe um caminho plausível para os primeiros clientes: `{answers['first_10_customers']}`.",
+            "potencial de indicação": f"- Se o MVP funcionar, o canal de boca a boca pode acelerar adoção no ICP `{answers['icp']}`.",
+            "adequação de preço": f"- A tese de preço ganha força porque `{answers['why_now']}` aponta espaço para uma opção mais acessível.",
+            "simplicidade operacional": f"- A solução pode vencer por simplicidade porque hoje o status quo é `{answers['current_solution']}`.",
+            "aprendizado rápido com pilotos": f"- O critério de sucesso inicial (`{answers['early_success']}`) permite aprender rápido e iterar cedo.",
+        }
+        return (
+            f"# Pro agent {idx}\n"
+            f"1. Strongest success arguments\n"
+            f"{lines[theme]}\n"
+            f"- Se a tese principal se sustentar, o produto melhora um fluxo operacional que já existe.\n"
+            f"\n2. Key enabling assumptions\n"
+            f"- O ICP percebe valor antes de exigir feature sprawl.\n"
+            f"- O onboarding para o MVP `{answers['mvp']}` é simples o suficiente para não matar adoção.\n"
+            f"\n3. How to increase odds of success\n"
+            f"- Explorar explicitamente a frente de `{theme}` como argumento comercial e métrica de produto.\n"
+            f"\n4. Confidence level\nModerate\n\n5. Provisional verdict\nCONDITIONAL GO\n"
+        )
 
     def _fallback_tenth_man_memo(self, answers):
-        return "# 10th Man Dissent Memo\n\n1. Strongest failure case\n- The problem is real but not budget-priority enough to support a repeatable business.\n\n2. Where the 9 pro agents may be fooling themselves\n- They may be confusing founder expertise with market demand.\n- They may be overestimating urgency and underestimating sales friction.\n\n3. Failure modes\n- Market: ICP does not allocate budget.\n- Product: MVP is too shallow to displace current workflows.\n- GTM: founder outbound generates interest but not paid conversion.\n- Financial: CAC rises before retention is proven.\n- Execution: long feedback loops slow iteration.\n\n4. Early warning indicators\n- Low response rates\n- Positive interviews but no pilot commitment\n- Pilots that do not convert\n- Weak ROI evidence\n\n5. What evidence would prove this wrong\n- Fast pilot conversion, repeated usage, and a clear budget owner.\n\n6. Final dissent verdict\nNO-GO until real buying behavior is observed.\n"
+        return (
+            f"# 10th Man Dissent Memo\n\n"
+            f"1. Strongest failure case\n"
+            f"- A dor existe, mas pode não ser forte o suficiente para deslocar o comportamento atual (`{answers['current_solution']}`) nem justificar pagamento recorrente.\n\n"
+            f"2. Where the 9 pro agents may be fooling themselves\n"
+            f"- Eles podem estar assumindo que entender a dor (`{answers['advantage']}`) equivale a ter product-market fit.\n"
+            f"- Eles podem estar superestimando a qualidade do canal inicial descrito em `{answers['first_10_customers']}`.\n\n"
+            f"3. Failure modes\n"
+            f"- Market: o ICP `{answers['icp']}` sente a dor, mas não prioriza orçamento.\n"
+            f"- Product: o MVP `{answers['mvp']}` não cobre exceções básicas e quebra confiança.\n"
+            f"- GTM: há interesse, mas pouco compromisso pago ou baixa indicação.\n"
+            f"- Financial: o ticket real fica abaixo do necessário para sustentar suporte e evolução.\n"
+            f"- Execution: falta velocidade para iterar em cima dos riscos declarados (`{answers['killer_risks']}`).\n\n"
+            f"4. Early warning indicators\n"
+            f"- Usuários gostam da ideia, mas continuam no processo manual.\n"
+            f"- O founder precisa operar manualmente demais para entregar valor.\n"
+            f"- Os primeiros usuários não indicam novos clientes.\n"
+            f"- O feedback positivo não vira renovação ou expansão.\n\n"
+            f"5. What evidence would prove this wrong\n"
+            f"- Pagamento recorrente real, uso consistente e prova de economia de tempo ou redução de fricção.\n\n"
+            f"6. Final dissent verdict\n"
+            f"NO-GO until real buying behavior is observed.\n"
+        )
 
     def _fallback_master_critique(self, persona_critiques, tenth_memo):
         return f"# Master Critique\n\n## strongest reasons to believe\n- Multiple personas see a real underlying pain.\n- The founder appears to have domain credibility.\n\n## strongest reasons to doubt\n- Budget ownership and conversion remain unproven.\n- The dissent case warns that urgency may be overstated.\n\n## conflict map\n- Positive side: pain exists and MVP is plausible.\n- Negative side: willingness-to-pay and repeatable GTM are still hypothetical.\n\n## what must be validated before green-lighting\n- 10-15 interviews\n- 2-3 pilots\n- at least one paid conversion path\n\n## final committee verdict\nCONDITIONAL GO\n\n## dissent memo anchor\n{tenth_memo}\n"

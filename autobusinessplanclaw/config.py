@@ -51,10 +51,15 @@ def load_config(path: str | Path) -> ABCConfig:
             pro_agent_count=int(runtime.get("pro_agent_count", 9)),
         ),
         llm=LLMConfig(
+            provider=str(llm.get("provider", "auto")),
             base_url=str(llm.get("base_url", "https://api.openai.com/v1")),
             api_key_env=str(llm.get("api_key_env", "OPENAI_API_KEY")),
             model=str(llm.get("model", "gpt-4o-mini")),
             temperature=float(llm.get("temperature", 0.2)),
+            timeout_seconds=int(llm.get("timeout_seconds", 45)),
+            openclaw_base_url=str(llm.get("openclaw_base_url", "http://127.0.0.1:18789/v1")),
+            openclaw_api_key_env=str(llm.get("openclaw_api_key_env", "OPENCLAW_GATEWAY_TOKEN")),
+            openclaw_model=str(llm.get("openclaw_model", "openclaw:main")),
         ),
         output=OutputConfig(root=str(output.get("root", "artifacts"))),
     )

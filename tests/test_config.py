@@ -12,6 +12,9 @@ business:
 runtime:
   critique_rounds: 3
   pro_agent_count: 9
+llm:
+  provider: openclaw-http
+  timeout_seconds: 20
 """,
         encoding="utf-8",
     )
@@ -20,6 +23,8 @@ runtime:
     assert cfg.business.idea == "Demo idea"
     assert cfg.runtime.critique_rounds == 3
     assert cfg.runtime.pro_agent_count == 9
+    assert cfg.llm.provider == "openclaw-http"
+    assert cfg.llm.timeout_seconds == 20
 
 
 def test_load_questionnaire(tmp_path):

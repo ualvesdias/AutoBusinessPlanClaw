@@ -30,10 +30,15 @@ class RuntimeConfig:
 
 @dataclass(frozen=True)
 class LLMConfig:
+    provider: str = "auto"
     base_url: str = "https://api.openai.com/v1"
     api_key_env: str = "OPENAI_API_KEY"
     model: str = "gpt-4o-mini"
     temperature: float = 0.2
+    timeout_seconds: int = 45
+    openclaw_base_url: str = "http://127.0.0.1:18789/v1"
+    openclaw_api_key_env: str = "OPENCLAW_GATEWAY_TOKEN"
+    openclaw_model: str = "openclaw:main"
 
 
 @dataclass(frozen=True)

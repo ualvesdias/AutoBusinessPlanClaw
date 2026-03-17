@@ -112,6 +112,27 @@ export OPENAI_API_KEY="sk-..."
 export XAI_API_KEY="xai-..."  # optional
 ```
 
+### LLM providers
+The project now supports two LLM paths:
+- `openai-compatible` → direct API via `OPENAI_API_KEY`
+- `openclaw-http` → OpenClaw Gateway OpenAI-compatible endpoint
+- `auto` → tries direct API first, then OpenClaw HTTP if configured
+
+Example:
+```yaml
+llm:
+  provider: auto
+  base_url: "https://api.openai.com/v1"
+  api_key_env: "OPENAI_API_KEY"
+  model: "gpt-4o-mini"
+  timeout_seconds: 45
+  openclaw_base_url: "http://127.0.0.1:18789/v1"
+  openclaw_api_key_env: "OPENCLAW_GATEWAY_TOKEN"
+  openclaw_model: "openclaw:main"
+```
+
+Note: OpenClaw HTTP support requires the Gateway chat-completions endpoint to be enabled and a valid gateway token.
+
 ## Usage
 ```bash
 businessclaw run --config config.businessclaw.yaml --answers questionnaire.json

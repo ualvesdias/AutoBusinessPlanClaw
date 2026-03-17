@@ -1,3 +1,5 @@
+import json
+
 from autobusinessplanclaw.config import load_config, load_questionnaire
 from autobusinessplanclaw.pipeline import Pipeline
 
@@ -97,3 +99,57 @@ answers:
     resumed = pipeline.run(answers, web_search_fn=None, output_dir=run_dir, resume=True)
     assert resumed == run_dir
     assert (run_dir / "checkpoint.json").exists()
+
+
+def test_pipeline_fresh_run_cleans_stale_outputs_and_rebuilds_reference_table(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+project:
+  name: demo
+business:
+  idea: Demo idea
+runtime:
+  allow_web_research: false
+  critique_rounds: 1
+llm:
+  provider: none
+output:
+  root: artifacts
+""",
+        encoding="utf-8",
+    )
+    answers_path = tmp_path / "answers.yaml"
+    answers_path.write_text(
+        """
+answers:
+  problem: a painful issue
+  icp: b2b security teams
+  current_solution: spreadsheets
+  why_now: current tools are noisy
+  advantage: founder expertise
+  mvp: prioritization dashboard
+  payment_reason: saves time and reduces risk
+  first_10_customers: founder outbound
+  early_success: 2 paying pilots
+  killer_risks: no budget
+""",
+        encoding="utf-8",
+    )
+    cfg = load_config(config_path)
+    answers = load_questionnaire(answers_path)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "competitor_reference_table.json").write_text('[{"name":"STALE"}]', encoding="utf-8")
+    (run_dir / "research_results.json").write_text('[{"query":"stale","results":[{"title":"old"}]}]', encoding="utf-8")
+    exports_dir = run_dir / "exports"
+    exports_dir.mkdir()
+    (exports_dir / "competitor_reference_table.md").write_text("STALE EXPORT", encoding="utf-8")
+
+    Pipeline(cfg).run(answers, web_search_fn=None, output_dir=run_dir, resume=False)
+
+    reference_rows = json.loads((run_dir / "competitor_reference_table.json").read_text(encoding="utf-8"))
+    assert reference_rows[0]["name"] == "Demo idea"
+    assert all(row["name"] != "STALE" for row in reference_rows)
+    assert "STALE EXPORT" not in (run_dir / "exports" / "competitor_reference_table.md").read_text(encoding="utf-8")
+    assert "stale" not in (run_dir / "research_results.json").read_text(encoding="utf-8").lower()

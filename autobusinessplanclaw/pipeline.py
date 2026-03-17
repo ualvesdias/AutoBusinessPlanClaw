@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import shutil
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, UTC
 from pathlib import Path
@@ -19,7 +20,18 @@ from .prompts import (
     planning_prompt,
     pro_agent_prompt,
 )
-from .research import build_competitor_queries, build_market_queries, fallback_competitors, fallback_evidence
+from .research import (
+    build_comparison_rows,
+    build_competitor_queries,
+    build_evidence_summary,
+    build_market_queries,
+    dedupe_evidence,
+    extract_competitors_from_evidence,
+    fallback_competitors,
+    fallback_evidence,
+    normalize_evidence,
+    write_comparison_exports,
+)
 
 
 class Pipeline:
@@ -38,6 +50,7 @@ class Pipeline:
     ) -> Path:
         run_id = datetime.now(UTC).strftime("abc-%Y%m%d-%H%M%S")
         run_dir = Path(output_dir or Path(self.config.output.root) / run_id)
+        self._prepare_run_dir(run_dir, resume=resume)
         run_dir.mkdir(parents=True, exist_ok=True)
         stages_dir = run_dir / "stages"
         exports_dir = run_dir / "exports"
@@ -54,7 +67,7 @@ class Pipeline:
         def stage_done(stage: Stage) -> bool:
             return stage.value in completed
 
-        queries = build_market_queries(self.config.business.idea, answers)
+        queries = build_market_queries(self.config.business.idea, answers, region=self.config.business.region)
         raw_research: list[dict[str, Any]] = self._safe_read_json(run_dir / "research_results.json", []) if resume else []
         evidence_data = self._safe_read_json(stages_dir / f"{Stage.MARKET_RESEARCH.value}.json", {}) if resume else {}
         evidence: list[EvidenceItem] = []
@@ -87,12 +100,14 @@ class Pipeline:
                         raw_research.append({"query": query, "results": results})
                         for item in results:
                             evidence.append(EvidenceItem(**item))
+            evidence = dedupe_evidence(evidence)
             if not evidence:
                 evidence = fallback_evidence(self.config.business.idea, answers)
             self._write_stage(stages_dir, Stage.MARKET_RESEARCH, {
                 "queries": queries,
                 "raw_research": raw_research,
                 "evidence": [e.__dict__ for e in evidence],
+                "evidence_summary": build_evidence_summary(evidence),
             })
             (run_dir / "research_queries.json").write_text(json.dumps(queries, indent=2, ensure_ascii=False), encoding="utf-8")
             (run_dir / "research_results.json").write_text(json.dumps(raw_research, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -106,6 +121,9 @@ class Pipeline:
             self._write_stage(stages_dir, Stage.COMPETITION, competition)
             (run_dir / "competitor_matrix.json").write_text(json.dumps(competition, indent=2, ensure_ascii=False), encoding="utf-8")
             self._write_competitor_exports(exports_dir, competition["competitors"])
+            comparison_rows = build_comparison_rows(competition["competitors"], self.config.business.idea, answers)
+            (run_dir / "competitor_reference_table.json").write_text(json.dumps(comparison_rows, indent=2, ensure_ascii=False), encoding="utf-8")
+            write_comparison_exports(comparison_rows, exports_dir)
             self._mark_stage_complete(checkpoint_path, Stage.COMPETITION, completed)
 
         synthesis = self._safe_read_json(run_dir / "synthesis.json", None) if resume else None
@@ -187,10 +205,38 @@ class Pipeline:
         self._mark_stage_complete(checkpoint_path, Stage.EXPORT, completed)
         return run_dir
 
+    def _prepare_run_dir(self, run_dir: Path, resume: bool) -> None:
+        if resume or not run_dir.exists():
+            return
+        managed_dirs = ["stages", "exports", "prompts"]
+        managed_files = [
+            "answers.json",
+            "business_plan.md",
+            "checkpoint.json",
+            "competitor_matrix.json",
+            "competitor_reference_table.json",
+            "critiques.json",
+            "persona_critiques.json",
+            "research_queries.json",
+            "research_results.json",
+            "run_summary.json",
+            "synthesis.json",
+            "tenth_man_report.json",
+            "doctor.json",
+        ]
+        for dirname in managed_dirs:
+            path = run_dir / dirname
+            if path.exists():
+                shutil.rmtree(path)
+        for filename in managed_files:
+            path = run_dir / filename
+            if path.exists():
+                path.unlink()
+
     def _build_competitor_matrix(self, answers: dict[str, str], web_search_fn=None) -> dict[str, Any]:
-        queries = build_competitor_queries(self.config.business.idea, answers)
-        competitors: list[dict[str, str]] = []
+        queries = build_competitor_queries(self.config.business.idea, answers, region=self.config.business.region)
         raw: list[dict[str, Any]] = []
+        evidence_items: list[EvidenceItem] = []
         if self.config.runtime.allow_web_research and web_search_fn is not None:
             with ThreadPoolExecutor(max_workers=self.config.runtime.parallel_workers) as executor:
                 future_map = {
@@ -204,29 +250,26 @@ class Pipeline:
                     except Exception:
                         results = []
                     raw.append({"query": query, "results": results})
-                    for idx, item in enumerate(results[:3], start=1):
-                        competitors.append({
-                            "name": item.get("title", f"Concorrente {idx}"),
-                            "type": "direct" if idx == 1 else "indirect",
-                            "positioning": item.get("snippet", "Posicionamento não extraído")[:400],
-                            "strengths": "Marca / presença de mercado",
-                            "weaknesses": "Necessita validação específica para o ICP",
-                            "pricing": "Desconhecido",
-                            "evidence": item.get("url", ""),
-                        })
-        if not competitors:
-            competitors = fallback_competitors(answers)
-        deduped: list[dict[str, str]] = []
-        seen: set[str] = set()
-        for competitor in competitors:
-            key = competitor["name"].strip().lower()
-            if key and key not in seen:
-                seen.add(key)
-                deduped.append(competitor)
+                    evidence_items.extend(normalize_evidence(results))
+
+        competitors = extract_competitors_from_evidence(dedupe_evidence(evidence_items))
+        if len(competitors) < 3:
+            fallback = fallback_competitors(answers)
+            existing = {c["name"].strip().lower() for c in competitors}
+            for competitor in fallback:
+                key = competitor["name"].strip().lower()
+                if key not in existing:
+                    competitors.append(competitor)
+                    existing.add(key)
+
         return {
             "queries": queries,
             "raw_results": raw,
-            "competitors": deduped,
+            "competitors": competitors,
+            "evidence_summary": {
+                "raw_result_batches": len(raw),
+                "competitor_count": len(competitors),
+            },
         }
 
     def _generate_plan(self, answers, evidence, synthesis, persona_critiques, tenth_man_report) -> str:
@@ -453,11 +496,15 @@ class Pipeline:
 """
 
     def _fallback_plan(self, answers, evidence, synthesis, persona_critiques, tenth_man_report) -> str:
-        evidence_md = "\n".join(f"- {e.title}: {e.snippet}" for e in evidence[:8])
+        evidence_md = "\n".join(f"- {e.title}: {e.url}" for e in evidence[:5])
         persona_names = ", ".join(persona_critiques.keys())
         market_sizes = self._estimate_market_sizes(answers)
         tam, sam, som = market_sizes["tam"], market_sizes["sam"], market_sizes["som"]
-        risk_base = tenth_man_report["master_critique"]
+        risk_summary = [
+            "- Budget ownership and conversion remain unproven.",
+            "- O risco principal é o ICP sentir a dor, mas não pagar recorrência.",
+            "- O MVP precisa provar time-to-value e confiabilidade rapidamente.",
+        ]
         competitors = synthesis.get("competitor_names", [])
         competition_line = ", ".join(competitors) if competitors else "status quo, consultoria especializada e ferramenta horizontal existente"
         return f"""# Business Plan — {self.config.business.idea}
@@ -526,8 +573,8 @@ class Pipeline:
 - Mitigation 1: run discovery calls and pre-sell pilots.
 - Mitigation 2: prove ROI on a narrow use case.
 - Mitigation 3: shorten time-to-value with a brutally simple onboarding flow.
-- 10th-man base work summary:
-{risk_base}
+- 10th-man summary:
+{chr(10).join(risk_summary)}
 
 ## 13. 30/60 day action plan
 - Days 1-15: interview prospects, refine ICP language, test pain severity.

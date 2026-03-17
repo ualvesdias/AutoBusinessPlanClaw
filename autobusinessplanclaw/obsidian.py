@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -140,10 +141,35 @@ def _build_canvas() -> dict[str, Any]:
     return {"nodes": nodes, "edges": edges}
 
 
+def _prepare_vault_dir(vault_path: Path) -> None:
+    managed_dirs = [
+        "00 Overview",
+        "01 Inputs",
+        "02 Research",
+        "03 Competition",
+        "04 Debate",
+        "05 Plan",
+        "06 Finance",
+        "07 GTM",
+        "08 Ops",
+    ]
+    managed_files = ["Home.md", ".obsidian-export.json"]
+    for dirname in managed_dirs:
+        path = vault_path / dirname
+        if path.exists():
+            shutil.rmtree(path)
+    for filename in managed_files:
+        path = vault_path / filename
+        if path.exists():
+            path.unlink()
+
+
+
 def export_run_to_obsidian(run_dir: str | Path, vault_dir: str | Path) -> Path:
     run_path = Path(run_dir)
     vault_path = Path(vault_dir)
     vault_path.mkdir(parents=True, exist_ok=True)
+    _prepare_vault_dir(vault_path)
 
     folders = {
         "home": vault_path,
@@ -166,6 +192,7 @@ def export_run_to_obsidian(run_dir: str | Path, vault_dir: str | Path) -> Path:
     persona = read_json(run_path / "persona_critiques.json", {})
     tenth = read_json(run_path / "tenth_man_report.json", {})
     competition = read_json(run_path / "competitor_matrix.json", {})
+    competitor_reference = read_json(run_path / "competitor_reference_table.json", [])
     critiques = read_json(run_path / "critiques.json", [])
     queries = read_json(run_path / "research_queries.json", [])
     checkpoint = read_json(run_path / "checkpoint.json", {})
@@ -173,6 +200,7 @@ def export_run_to_obsidian(run_dir: str | Path, vault_dir: str | Path) -> Path:
     plan_md = (run_path / "business_plan.md").read_text(encoding="utf-8") if (run_path / "business_plan.md").exists() else ""
     gtm_md = (run_path / "exports" / "gtm_experiments.md").read_text(encoding="utf-8") if (run_path / "exports" / "gtm_experiments.md").exists() else ""
     competitor_md = (run_path / "exports" / "competitor_matrix.md").read_text(encoding="utf-8") if (run_path / "exports" / "competitor_matrix.md").exists() else ""
+    competitor_ref_md = (run_path / "exports" / "competitor_reference_table.md").read_text(encoding="utf-8") if (run_path / "exports" / "competitor_reference_table.md").exists() else ""
     finance_csv = (run_path / "exports" / "financial_model.csv").read_text(encoding="utf-8") if (run_path / "exports" / "financial_model.csv").exists() else ""
 
     idea = str(summary.get("idea") or run_path.name)
@@ -231,8 +259,13 @@ def export_run_to_obsidian(run_dir: str | Path, vault_dir: str | Path) -> Path:
         f"- {_link('MOC')}",
         f"- {_link('Research Overview')}",
         f"- {_link('Business Plan Hub')}",
+        f"- {_link('Competitor Reference Table')}",
+        f"- {_link('Our Idea vs Market')}",
         "",
         competitor_md if competitor_md else 'Nenhuma matriz de concorrência encontrada.',
+        "",
+        "## Tabela cruzada",
+        competitor_ref_md if competitor_ref_md else 'Nenhuma tabela cruzada encontrada.',
         "",
         "## Notas individuais",
     ]
@@ -250,9 +283,35 @@ def export_run_to_obsidian(run_dir: str | Path, vault_dir: str | Path) -> Path:
             f"- Fraquezas: {competitor.get('weaknesses', '')}\n"
             f"- Pricing: {competitor.get('pricing', '')}\n"
             f"- Evidência: {competitor.get('evidence', '')}\n\n"
-            f"## Links\n- {_link('Competition Matrix')}\n- {_link('Business Plan Hub')}\n- {_link('Research Overview')}\n"
+            f"## Dossiê\n"
+            f"Este competidor aparece na pesquisa como player relevante no espaço de automação/agendamento/WhatsApp.\n\n"
+            f"## Links\n- {_link('Competition Matrix')}\n- {_link('Competitor Reference Table')}\n- {_link('Our Idea vs Market')}\n- {_link('Business Plan Hub')}\n- {_link('Research Overview')}\n"
         )
         (folders["competition"] / note_name).write_text(content, encoding="utf-8")
+
+    (folders["competition"] / "Competitor Reference Table.md").write_text(
+        f"# Competitor Reference Table\n\n{competitor_ref_md if competitor_ref_md else 'Nenhuma tabela cruzada encontrada.'}\n",
+        encoding="utf-8",
+    )
+
+    our_idea_lines = [
+        "# Our Idea vs Market",
+        "",
+        "## Nossa ideia",
+        f"- Ideia: {idea}",
+        f"- ICP: {answers.get('icp', '')}",
+        f"- MVP: {answers.get('mvp', '')}",
+        f"- Vantagem: {answers.get('advantage', '')}",
+        "",
+        "## Referências cruzadas",
+    ]
+    for row in competitor_reference:
+        name = row.get('name', '')
+        if row.get('type') == 'our_idea':
+            continue
+        our_idea_lines.append(f"- vs {_link('Competitor - ' + safe_note_name(name))}")
+    (folders["competition"] / "Our Idea vs Market.md").write_text("\n".join(our_idea_lines), encoding="utf-8")
+
     (folders["competition"] / "Competition Matrix.md").write_text("\n".join(comp_overview_lines), encoding="utf-8")
 
     debate_lines = ["# Debate Overview", "", "## Persona critiques"]

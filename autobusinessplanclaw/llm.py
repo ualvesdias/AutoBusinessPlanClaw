@@ -37,6 +37,8 @@ class OpenAICompatibleClient:
 
     def complete(self, system: str, user: str) -> str:
         provider = self.config.provider.lower()
+        if provider == "none":
+            raise LLMError("LLM provider disabled via provider=none")
         if provider == "openclaw-http":
             return self._complete_openclaw_http(system, user)
         if provider == "openai-compatible":

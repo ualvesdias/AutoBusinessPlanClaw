@@ -10,10 +10,14 @@ business:
 
 runtime:
   timezone: "America/Sao_Paulo"
-  max_web_results: 6
+  max_web_results: 10
   allow_web_research: true
   critique_rounds: 2
   pro_agent_count: 9
+  parallel_workers: 6
+  prompt_evidence_limit: 80
+  persist_full_prompts: true
+  exhaustive_mode: true
 
 llm:
   provider: "auto"
@@ -25,11 +29,6 @@ llm:
   max_completion_tokens: 16000
   openclaw_base_url: "http://127.0.0.1:18789/v1"
   openclaw_api_key_env: "OPENCLAW_GATEWAY_TOKEN"
-  openclaw_model: "openclaw:main"
-
-output:
-  root: "artifacts"
-AY_TOKEN"
   openclaw_model: "openclaw:main"
 
 output:

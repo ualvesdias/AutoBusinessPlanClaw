@@ -1,15 +1,7 @@
-<p align="center">
-  <img src="docs/image/logo.png" width="700" alt="AutoBusinessPlanClaw Logo">
-</p>
-
 <h2 align="center"><b>Chat an Idea. Get a Business Plan. Multi-Agent, Runnable, Exportable.</b></h2>
 
 <p align="center">
   <b><i><font size="5">Just chat with <a href="#openclaw-integration">OpenClaw</a>: "Create a business plan for X" → done.</font></i></b>
-</p>
-
-<p align="center">
-  <img src="docs/image/framework.png" width="100%" alt="AutoBusinessPlanClaw Framework">
 </p>
 
 <p align="center">

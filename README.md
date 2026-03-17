@@ -113,10 +113,10 @@ export XAI_API_KEY="xai-..."  # optional
 ```
 
 ### LLM providers
-The project now supports two LLM paths:
-- `openai-compatible` → direct API via `OPENAI_API_KEY`
-- `openclaw-http` → OpenClaw Gateway OpenAI-compatible endpoint
-- `auto` → tries direct API first, then OpenClaw HTTP if configured
+The project is OpenClaw-first:
+- `openclaw-http` → força uso do Gateway OpenClaw local
+- `openai-compatible` → força uso de API direta
+- `auto` → tenta OpenClaw HTTP primeiro, depois API direta e, se nada funcionar, o pipeline cai no fallback determinístico
 
 Example:
 ```yaml
@@ -131,7 +131,8 @@ llm:
   openclaw_model: "openclaw:main"
 ```
 
-Note: OpenClaw HTTP support requires the Gateway chat-completions endpoint to be enabled and a valid gateway token.
+If `OPENCLAW_GATEWAY_TOKEN` is not set, the project also tries to discover the token from `~/.openclaw/openclaw.json`.
+Note: OpenClaw HTTP support requires the Gateway chat-completions endpoint to be enabled.
 
 ## Usage
 ```bash

@@ -1,0 +1,14 @@
+{
+  "answers": {
+    "problem": "Ajudo a terceirizar o trabalho de gestão de agendamentos e, como consequência, poupar tempo precioso do meu ICP.",
+    "icp": "Profissionais liberais (nutricionistas, psicólogos, personal trainers etc.) que trabalham sozinhos e possuem necessidade de agendar seus atendimentos.",
+    "current_solution": "Eles mesmos fazem, de forma manual, a gestão de seus agendamentos.",
+    "why_now": "Soluções atuais que realmente funcionam custam muito caro e normalmente apenas clínicas mais robustas possuem capacidade de pagar.",
+    "advantage": "Além de ter experiência técnica para desenvolver a solução, também entendo a necessidade desse ICP de forma a prover uma solução que funcione bem a um preço viável.",
+    "mvp": "Uma plataforma web para controle e gestão visual, além de setup inicial e configuração do assistente no WhatsApp do cliente.",
+    "payment_reason": "O tempo desses profissionais é muito precioso e a gestão manual de agendas é custosa, tediosa e leva muito tempo.",
+    "first_10_customers": "Conheço alguns profissionais que se encaixam no ICP. Posso oferecer acesso inicial a custo muito baixo ou freemium em troca de recomendações, depoimentos e compartilhamento com outros contatos.",
+    "early_success": "Conseguir os primeiros 5 clientes pagantes e depoimentos positivos de todos eles.",
+    "killer_risks": "O MVP não atender adequadamente às necessidades mais básicas, não haver iteração de melhorias em tempo real baseadas nos feedbacks dos primeiros clientes e falha no fluxo de compartilhamento inicial boca a boca."
+  }
+}

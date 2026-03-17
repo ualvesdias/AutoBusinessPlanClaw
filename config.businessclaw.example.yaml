@@ -1,0 +1,23 @@
+project:
+  name: "my-business-idea"
+  mode: "full-auto"
+
+business:
+  idea: "AI platform that helps SMB SaaS companies prioritize external cyber risk fixes"
+  region: "Brazil"
+  currency: "BRL"
+  business_model_hint: "B2B SaaS"
+
+runtime:
+  timezone: "America/Sao_Paulo"
+  max_web_results: 6
+  allow_web_research: true
+
+llm:
+  base_url: "https://api.openai.com/v1"
+  api_key_env: "OPENAI_API_KEY"
+  model: "gpt-4o-mini"
+  temperature: 0.2
+
+output:
+  root: "artifacts"

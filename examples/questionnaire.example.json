@@ -1,0 +1,14 @@
+{
+  "answers": {
+    "problem": "SMB SaaS companies struggle to prioritize which external vulnerabilities deserve immediate attention.",
+    "icp": "B2B SaaS companies with 20 to 200 employees, one security lead or fractional CISO, and limited AppSec maturity.",
+    "current_solution": "They use scanners, spreadsheets, ticket backlogs, and occasional consulting projects.",
+    "why_now": "Existing tools flood teams with findings but do not translate them into business-priority remediation decisions.",
+    "advantage": "Deep offensive-security experience plus founder access to likely early design partners.",
+    "mvp": "A dashboard that ingests external findings, scores exploitability and business exposure, and outputs a prioritized remediation queue.",
+    "payment_reason": "It reduces breach exposure and saves senior security time by focusing remediation on what matters most.",
+    "first_10_customers": "Warm outbound to founder network, LinkedIn content, and direct outreach to Brazilian B2B SaaS security leaders.",
+    "early_success": "10 discovery calls, 3 pilots, 2 paying customers, and weekly product usage by pilot teams in 60 days.",
+    "killer_risks": "Weak willingness to pay, long security-sales cycles, and inability to show meaningful prioritization accuracy over existing tools."
+  }
+}

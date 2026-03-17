@@ -1,0 +1,22 @@
+[project]
+name = "autobusinessplanclaw"
+version = "0.1.0"
+description = "AutoBusinessPlanClaw — turn an idea + founder answers into an actionable business plan."
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml>=6.0",
+    "rich>=13.0",
+    "requests>=2.31.0",
+]
+readme = "README.md"
+license = {text = "MIT"}
+
+[project.scripts]
+businessclaw = "autobusinessplanclaw.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["autobusinessplanclaw"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

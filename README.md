@@ -56,7 +56,8 @@ The pipeline is designed to be **inspectable, resumable, and OpenClaw-friendly**
 # 1. Clone & install
 git clone https://github.com/ualvesdias/AutoBusinessPlanClaw.git
 cd AutoBusinessPlanClaw
-python3 -m venv .venv && source .venv/bin/activate
+python3 -m pip install virtualenv
+python3 -m virtualenv .venv && source .venv/bin/activate
 pip install -e .
 
 # 2. Configure
@@ -250,6 +251,12 @@ output:
 ```bash
 source .venv/bin/activate
 python -m pytest -q
+```
+
+If you do not have `virtualenv` installed yet:
+
+```bash
+python3 -m pip install virtualenv
 ```
 
 ---

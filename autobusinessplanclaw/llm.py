@@ -17,6 +17,9 @@ class OpenAICompatibleClient:
     def __init__(self, config: LLMConfig):
         self.config = config
 
+    def is_configured(self) -> bool:
+        return bool(os.getenv(self.config.api_key_env, ""))
+
     def _api_key(self) -> str:
         key = os.getenv(self.config.api_key_env, "")
         if not key:

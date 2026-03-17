@@ -21,3 +21,38 @@ def normalize_evidence(raw_items: list[dict]) -> list[EvidenceItem]:
         snippet = str(item.get("snippet") or item.get("description") or item.get("text") or "")
         items.append(EvidenceItem(title=title, url=url, snippet=snippet))
     return items
+
+
+def fallback_evidence(idea: str, answers: dict[str, str]) -> list[EvidenceItem]:
+    return [
+        EvidenceItem(
+            title="Founder problem statement",
+            url="founder://problem",
+            snippet=answers["problem"],
+        ),
+        EvidenceItem(
+            title="Founder ICP hypothesis",
+            url="founder://icp",
+            snippet=answers["icp"],
+        ),
+        EvidenceItem(
+            title="Current workaround analysis",
+            url="founder://status-quo",
+            snippet=answers["current_solution"],
+        ),
+        EvidenceItem(
+            title="Monetization hypothesis",
+            url="founder://monetization",
+            snippet=answers["payment_reason"],
+        ),
+        EvidenceItem(
+            title="Initial distribution hypothesis",
+            url="founder://gtm",
+            snippet=answers["first_10_customers"],
+        ),
+        EvidenceItem(
+            title="Core startup idea",
+            url="founder://idea",
+            snippet=idea,
+        ),
+    ]

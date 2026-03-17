@@ -68,7 +68,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     )
     console.print(f"Business plan generated in [bold]{run_dir}[/bold]")
     console.print(f"- {run_dir / 'business_plan.md'}")
-    console.print(f"- {run_dir / 'research_results.json'}")
+    console.print(f"- {run_dir / 'exports' / 'financial_model.csv'}")
+    console.print(f"- {run_dir / 'exports' / 'gtm_experiments.md'}")
     return 0
 
 

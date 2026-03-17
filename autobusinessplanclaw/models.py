@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
+from enum import Enum
 from typing import Any
 
 
@@ -23,6 +24,7 @@ class RuntimeConfig:
     timezone: str = "America/Sao_Paulo"
     max_web_results: int = 8
     allow_web_research: bool = True
+    critique_rounds: int = 2
 
 
 @dataclass(frozen=True)
@@ -60,6 +62,18 @@ class EvidenceItem:
     title: str
     url: str
     snippet: str
+
+
+class Stage(str, Enum):
+    INTAKE = "intake"
+    MARKET_RESEARCH = "market_research"
+    SYNTHESIS = "synthesis"
+    PLAN_DRAFT = "plan_draft"
+    CRITIQUE = "critique"
+    REVISION = "revision"
+    FINANCIALS = "financials"
+    GTM_PACK = "gtm_pack"
+    EXPORT = "export"
 
 
 @dataclass(frozen=True)

@@ -9,12 +9,15 @@ project:
   name: demo
 business:
   idea: Demo idea
+runtime:
+  critique_rounds: 3
 """,
         encoding="utf-8",
     )
     cfg = load_config(path)
     assert cfg.project.name == "demo"
     assert cfg.business.idea == "Demo idea"
+    assert cfg.runtime.critique_rounds == 3
 
 
 def test_load_questionnaire(tmp_path):

@@ -12,6 +12,13 @@ Turn a founder idea into a rigorous business plan, not fluffy startup fanfiction
 4. Run `businessclaw run --config ... --answers ...`.
 5. Return the generated artifact path and summarize the business verdict.
 
+## Preferred OpenClaw flow
+- Use the main session for discovery questions.
+- Use an ACP/session run if you want isolated long-running generation.
+- Use web research when available; otherwise mark claims as assumptions.
+- Save important founder preferences and business context in workspace memory.
+- If asked for reminders or follow-ups, create cron reminders with explicit business context.
+
 ## Quality bar
 - Be skeptical.
 - Surface assumptions explicitly.

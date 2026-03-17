@@ -12,6 +12,7 @@ runtime:
   timezone: "America/Sao_Paulo"
   max_web_results: 6
   allow_web_research: true
+  critique_rounds: 2
 
 llm:
   base_url: "https://api.openai.com/v1"

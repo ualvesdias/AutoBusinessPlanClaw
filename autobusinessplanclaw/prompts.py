@@ -12,6 +12,21 @@ Rules:
 - Produce execution-ready content.
 """
 
+CRITIC_PROMPT = """You are the internal investment committee.
+Critique the plan brutally but constructively.
+Focus on weak assumptions, missing evidence, GTM gaps, pricing weaknesses, operational blind spots, financial nonsense, and unvalidated risks.
+Return a concise markdown memo with:
+1. Top 5 issues
+2. What evidence is missing
+3. What must change before approval
+4. Current verdict: GO / CONDITIONAL GO / NO-GO
+"""
+
+REVISION_PROMPT = """Revise the business plan using the critique memo.
+Keep what is strong, fix what is weak, and explicitly tighten assumptions, GTM, pricing, operations, and risk mitigation.
+The result must still be a polished final business plan in markdown.
+"""
+
 
 def questionnaire_block(answers: dict[str, str]) -> str:
     lines = []
@@ -52,11 +67,12 @@ Generate a complete business plan in Markdown with these sections:
 11. Financial model (12-month assumptions, revenue drivers, cost drivers, burn/runway commentary)
 12. Risk register with mitigation experiments
 13. 30/60 day action plan
-14. Key assumptions to validate next
+14. Assumptions vs Evidence
+15. Final verdict: GO / CONDITIONAL GO / NO-GO and why
 
 Constraints:
 - Use bullet points and short tables only when they improve clarity.
 - Whenever you estimate a market number, show the formula or logic.
-- Add an Assumptions vs Evidence section near the end.
-- End with a brutally honest investment-style verdict: GO / CONDITIONAL GO / NO-GO and why.
+- Mention when an estimate is based on founder input vs external evidence.
+- End with a brutally honest investment-style verdict.
 """.strip()

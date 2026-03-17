@@ -2,7 +2,7 @@
 
 Turn a raw startup idea plus a short founder questionnaire into a **complete, actionable business plan**.
 
-Inspired by AutoResearchClaw, but pointed at something more commercially useful for founders: market validation, positioning, monetization, GTM, operations, financial assumptions, and risk mitigation.
+Inspired by AutoResearchClaw, but aimed at founders and operators instead of academic publishing. The repo now behaves like a staged pipeline, not just a single prompt wrapper pretending to be infrastructure.
 
 ## What it does
 
@@ -10,22 +10,34 @@ AutoBusinessPlanClaw takes:
 - an initial business idea
 - a required 10-question founder questionnaire
 - optional live market signals from web search
+- optional LLM generation and critique rounds
 
 And generates:
-- `business_plan.md` — full actionable business plan
+- `business_plan.md` — final plan after critique/revision rounds
 - `answers.json` — normalized founder inputs
 - `research_queries.json` — market research search strategy
 - `research_results.json` — collected web evidence
+- `synthesis.json` — structured business synthesis
+- `critiques.json` — critique history
+- `exports/financial_model.csv` — spreadsheet-friendly financial model
+- `exports/financial_model.xlsx-ready.tsv` — Excel-friendly tab-separated export
+- `exports/gtm_experiments.md` — first GTM experiment pack
+- `stages/` — per-stage artifacts for pipeline introspection
 - `run_summary.json` — run metadata
 
-## Core workflow
+## Pipeline stages
 
-1. Founder defines the idea in config
-2. Founder answers the required questions
-3. Pipeline builds market-research queries
-4. Pipeline gathers external market signals
-5. LLM drafts a structured business plan grounded in founder inputs + evidence
-6. Artifacts are written to a local run directory
+1. `intake` — normalize founder idea + questionnaire
+2. `market_research` — build search queries and gather evidence
+3. `synthesis` — compress inputs into strategic assumptions
+4. `plan_draft` — create the first full business plan
+5. `critique` — challenge weak assumptions and holes
+6. `revision` — tighten the plan
+7. `financials` — export a 12-month starter financial model
+8. `gtm_pack` — generate first GTM experiments
+9. `export` — write final run summary
+
+This makes it much closer in spirit to AutoResearchClaw: staged, inspectable, artifact-driven, and designed for autonomous agent execution.
 
 ## Required founder questions
 
@@ -40,9 +52,9 @@ And generates:
 - What does success look like in the first 30–60 days?
 - What are the biggest risks that could kill this idea?
 
-## Recommended business-plan structure
+## Generated plan structure
 
-The generated plan targets these sections:
+The plan targets these sections:
 1. Executive summary
 2. Problem definition and urgency
 3. ICP
@@ -61,6 +73,7 @@ The generated plan targets these sections:
 
 ## Installation
 
+### Preferred
 ```bash
 git clone <your-fork-or-local-path> AutoBusinessPlanClaw
 cd AutoBusinessPlanClaw
@@ -69,13 +82,22 @@ source .venv/bin/activate
 pip install -e .
 ```
 
+### If Ubuntu is missing `venv` / `pip`
+Install system packages first:
+```bash
+sudo apt-get update
+sudo apt-get install -y python3-venv python3-pip
+```
+
+Then create the local `.venv` inside the project folder.
+
 ## Configuration
 
 ```bash
 cp config.businessclaw.example.yaml config.businessclaw.yaml
 cp examples/questionnaire.example.json questionnaire.json
 export OPENAI_API_KEY="sk-..."
-# optional if you want live search enrichment
+# optional for live search enrichment
 export XAI_API_KEY="xai-..."
 ```
 
@@ -91,24 +113,36 @@ Or create a blank questionnaire first:
 businessclaw init-questionnaire --output questionnaire.json
 ```
 
-## OpenClaw usage pattern
+## Offline fallback mode
+
+If no `OPENAI_API_KEY` is configured, the pipeline still runs in a deterministic fallback mode:
+- it uses founder inputs + fallback evidence
+- it produces a full first-pass business plan
+- it still emits stage artifacts, critiques, GTM pack, and financial exports
+
+That means the repo remains usable for development, testing, and OpenClaw orchestration even without live model access.
+
+## OpenClaw-native workflow
 
 This repo is designed so an OpenClaw agent can:
 1. ask the founder the required questions
 2. write the answers file
 3. run the generator locally
 4. return the resulting `business_plan.md`
+5. schedule follow-up validation tasks or reminders
 
-## What should improve next
+See:
+- `AUTOBUSINESSPLANCLAW_AGENTS.md`
+- `docs/OPENCLAW_RUNBOOK.md`
 
-This first version is intentionally practical, not bloated. The obvious next upgrades are:
-- multi-stage critique/revision loops
-- stronger source extraction and citation formatting
-- financial spreadsheet export
-- customer interview script generation
-- GTM experiment pack generation
-- scorecards for market attractiveness and founder advantage
-- OpenClaw bridge adapters for memory, messaging, cron, and parallel sessions
+## Suggested next upgrades
+
+- stronger evidence extraction and citations
+- reusable ICP scoring
+- benchmark pricing library
+- scenario-based financial sensitivity analysis
+- customer interview script generator
+- OpenClaw adapters for memory, cron, sessions, and messaging
 
 ## License
 

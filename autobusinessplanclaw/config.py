@@ -47,6 +47,7 @@ def load_config(path: str | Path) -> ABCConfig:
             timezone=str(runtime.get("timezone", "America/Sao_Paulo")),
             max_web_results=int(runtime.get("max_web_results", 8)),
             allow_web_research=bool(runtime.get("allow_web_research", True)),
+            critique_rounds=int(runtime.get("critique_rounds", 2)),
         ),
         llm=LLMConfig(
             base_url=str(llm.get("base_url", "https://api.openai.com/v1")),

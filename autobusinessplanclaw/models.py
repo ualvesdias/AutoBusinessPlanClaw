@@ -68,10 +68,11 @@ class EvidenceItem:
 class Stage(str, Enum):
     INTAKE = "intake"
     MARKET_RESEARCH = "market_research"
+    COMPETITION = "competition"
     SYNTHESIS = "synthesis"
-    PLAN_DRAFT = "plan_draft"
     PERSONA_CRITIQUE = "persona_critique"
     TENTH_MAN = "tenth_man"
+    PLAN_DRAFT = "plan_draft"
     CRITIQUE = "critique"
     REVISION = "revision"
     FINANCIALS = "financials"

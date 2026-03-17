@@ -65,11 +65,14 @@ def cmd_run(args: argparse.Namespace) -> int:
         answers=answers,
         web_search_fn=web_search_wrapper,
         output_dir=args.output,
+        resume=args.resume,
     )
     console.print(f"Business plan generated in [bold]{run_dir}[/bold]")
     console.print(f"- {run_dir / 'business_plan.md'}")
     console.print(f"- {run_dir / 'persona_critiques.json'}")
     console.print(f"- {run_dir / 'tenth_man_report.json'}")
+    console.print(f"- {run_dir / 'competitor_matrix.json'}")
+    console.print(f"- {run_dir / 'exports' / 'competitor_matrix.csv'}")
     console.print(f"- {run_dir / 'exports' / 'financial_model.csv'}")
     console.print(f"- {run_dir / 'exports' / 'gtm_experiments.md'}")
     return 0
@@ -86,6 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--config", "-c", default="config.businessclaw.yaml")
     run_p.add_argument("--answers", "-a", default="questionnaire.json")
     run_p.add_argument("--output", "-o")
+    run_p.add_argument("--resume", action="store_true", help="Retomar um run existente usando checkpoint.json")
 
     args = parser.parse_args(argv)
     if args.command == "init-questionnaire":

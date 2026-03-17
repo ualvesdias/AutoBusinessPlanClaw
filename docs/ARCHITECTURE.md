@@ -7,6 +7,7 @@ Mirror the strengths of AutoResearchClaw that actually matter here:
 - deterministic local execution path
 - agent-friendly CLI
 - room for future multi-agent expansion
+- resumable runs
 
 ## Current architecture
 
@@ -17,6 +18,7 @@ Mirror the strengths of AutoResearchClaw that actually matter here:
 ### Runtime stages
 - Intake
 - Market research
+- Competition mapping
 - Synthesis
 - Persona critique
 - 10th-man debate
@@ -30,11 +32,25 @@ Mirror the strengths of AutoResearchClaw that actually matter here:
 ### Outputs
 - final markdown plan
 - JSON stage artifacts
+- checkpoint metadata
 - financial CSV/TSV
+- competitor matrix CSV/Markdown/JSON
 - GTM experiment memo
 - critique history
 - persona critique layer
 - 10th-man debate layer
+
+## Checkpoint/resume model
+Each stage writes artifacts and then updates `checkpoint.json`.
+A resumed run can reuse:
+- market research artifacts
+- competitor matrix
+- synthesis
+- persona critiques
+- 10th-man debate
+- draft and revisions
+
+This keeps the pipeline inspectable and resumable instead of forcing a full rerun every time.
 
 ## Multi-agent critique design
 
@@ -43,20 +59,12 @@ Four named agents evaluate the idea from different viewpoints:
 1. Investor
 2. Potential client
 3. Salesman
-4. Expert in the business niche
-
-These agents identify different classes of weakness:
-- investor → market size, defensibility, return profile
-- potential client → urgency, trust, switching cost, budget ownership
-- salesman → wedge, objections, conversion friction, message-market fit
-- expert → technical realism, domain workflow fit, superiority over status quo
+4. Expert in the business niche (inferred from the idea and questionnaire)
 
 ### Layer 2: 10th-man protocol
 After the persona critics:
 - 9 pro agents construct the strongest credible case for success
 - the 10th man must disagree with the emergent pro verdict and build the strongest credible case for failure
-
-This avoids a common failure mode in agent systems: consensus collapse into polished optimism.
 
 ### Layer 3: Master critique synthesis
 A final synthesis memo combines:
@@ -66,19 +74,17 @@ A final synthesis memo combines:
 
 That synthesis becomes core material for the business plan's risk section.
 
-## Why this shape works
-A business plan generator should not be a single call that emits polished nonsense. The pipeline forces structure:
-- founder hypotheses are explicit
-- research queries are inspectable
-- synthesis is separated from writing
-- critique and revision are first-class stages
-- spreadsheet exports support actual operator work
-- the dissent mechanism prevents shallow consensus
+## Competition stage
+The competition stage maps direct, indirect, and status-quo competition and exports a matrix.
+This improves:
+- competitive analysis
+- differentiation reasoning
+- GTM realism
+- risk modeling
 
 ## Next architectural upgrades
-- multiple specialist expert agents by vertical
-- competitor-evidence normalization
+- stage-level selective reruns
+- specialist expert personas by sub-vertical
+- competitor evidence normalization
 - pricing recommendation engine
 - interview-insight ingestion
-- validation backlog prioritization
-- checkpoint/resume per stage

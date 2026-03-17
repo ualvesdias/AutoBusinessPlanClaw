@@ -9,6 +9,7 @@ from typing import Any
 from rich.console import Console
 
 from .config import ConfigError, load_config, load_questionnaire
+from .obsidian import export_run_to_obsidian
 from .pipeline import Pipeline
 from .questionnaire import REQUIRED_QUESTIONS
 from .research import normalize_evidence
@@ -78,6 +79,15 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export_obsidian(args: argparse.Namespace) -> int:
+    vault_dir = export_run_to_obsidian(args.run_dir, args.vault_dir)
+    console.print(f"Vault Obsidian exportado para [bold]{vault_dir}[/bold]")
+    console.print(f"- {vault_dir / 'Home.md'}")
+    console.print(f"- {vault_dir / '00 Overview' / 'Project Summary.md'}")
+    console.print(f"- {vault_dir / '04 Debate' / 'Tenth Man.md'}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="businessclaw", description="AutoBusinessPlanClaw CLI")
     sub = parser.add_subparsers(dest="command")
@@ -91,11 +101,17 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--output", "-o")
     run_p.add_argument("--resume", action="store_true", help="Retomar um run existente usando checkpoint.json")
 
+    obs_p = sub.add_parser("export-obsidian", help="Exportar um run para um novo vault do Obsidian")
+    obs_p.add_argument("--run-dir", required=True)
+    obs_p.add_argument("--vault-dir", required=True)
+
     args = parser.parse_args(argv)
     if args.command == "init-questionnaire":
         return cmd_init_questionnaire(args)
     if args.command == "run":
         return cmd_run(args)
+    if args.command == "export-obsidian":
+        return cmd_export_obsidian(args)
     parser.print_help()
     return 0
 

@@ -108,6 +108,11 @@ With resume:
 businessclaw run --config config.businessclaw.yaml --answers questionnaire.json --output artifacts/my-run --resume
 ```
 
+Export para um novo vault do Obsidian:
+```bash
+businessclaw export-obsidian --run-dir artifacts/my-run --vault-dir exports/obsidian/my-run-vault
+```
+
 ## Offline fallback mode
 If no `OPENAI_API_KEY` is configured, the pipeline still runs in deterministic fallback mode and still emits:
 - persona critiques

@@ -9,8 +9,9 @@ Turn a founder idea into a rigorous business plan, not fluffy startup fanfiction
 1. Ask for or collect the 10 required founder answers.
 2. Write them into a questionnaire file.
 3. Confirm config has the target idea, region, and currency.
-4. Run `businessclaw run --config ... --answers ...`.
-5. Return the generated artifact path and summarize the business verdict.
+4. Prefer running `businessclaw run --config ... --answers ... --use-gateway-web-search` so the project can call the local OpenClaw Gateway for web research during execution.
+5. If direct Gateway bridge mode is unavailable, fall back to writing `web_search_results.json` and use injected web search.
+6. Return the generated artifact path and summarize the business verdict.
 
 ## Multi-agent critique expectation
 The pipeline now includes:

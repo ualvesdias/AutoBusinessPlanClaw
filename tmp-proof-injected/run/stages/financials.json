@@ -1,0 +1,124 @@
+{
+  "rows": [
+    {
+      "month": 1,
+      "customers": 1,
+      "arpa": 1200,
+      "revenue": 1200,
+      "cogs": 500,
+      "opex": 35000,
+      "net_burn": 34300,
+      "cash_flow": -34300
+    },
+    {
+      "month": 2,
+      "customers": 2,
+      "arpa": 1200,
+      "revenue": 2400,
+      "cogs": 500,
+      "opex": 35000,
+      "net_burn": 33100,
+      "cash_flow": -33100
+    },
+    {
+      "month": 3,
+      "customers": 3,
+      "arpa": 1200,
+      "revenue": 3600,
+      "cogs": 500,
+      "opex": 35000,
+      "net_burn": 31900,
+      "cash_flow": -31900
+    },
+    {
+      "month": 4,
+      "customers": 4,
+      "arpa": 1200,
+      "revenue": 4800,
+      "cogs": 576,
+      "opex": 35000,
+      "net_burn": 30776,
+      "cash_flow": -30776
+    },
+    {
+      "month": 5,
+      "customers": 5,
+      "arpa": 1200,
+      "revenue": 6000,
+      "cogs": 720,
+      "opex": 35000,
+      "net_burn": 29720,
+      "cash_flow": -29720
+    },
+    {
+      "month": 6,
+      "customers": 6,
+      "arpa": 1200,
+      "revenue": 7200,
+      "cogs": 864,
+      "opex": 35000,
+      "net_burn": 28664,
+      "cash_flow": -28664
+    },
+    {
+      "month": 7,
+      "customers": 8,
+      "arpa": 1200,
+      "revenue": 9600,
+      "cogs": 1152,
+      "opex": 37000,
+      "net_burn": 28552,
+      "cash_flow": -28552
+    },
+    {
+      "month": 8,
+      "customers": 10,
+      "arpa": 1200,
+      "revenue": 12000,
+      "cogs": 1440,
+      "opex": 37000,
+      "net_burn": 26440,
+      "cash_flow": -26440
+    },
+    {
+      "month": 9,
+      "customers": 12,
+      "arpa": 1200,
+      "revenue": 14400,
+      "cogs": 1728,
+      "opex": 37000,
+      "net_burn": 24328,
+      "cash_flow": -24328
+    },
+    {
+      "month": 10,
+      "customers": 14,
+      "arpa": 1200,
+      "revenue": 16800,
+      "cogs": 2016,
+      "opex": 37000,
+      "net_burn": 22216,
+      "cash_flow": -22216
+    },
+    {
+      "month": 11,
+      "customers": 16,
+      "arpa": 1200,
+      "revenue": 19200,
+      "cogs": 2304,
+      "opex": 37000,
+      "net_burn": 20104,
+      "cash_flow": -20104
+    },
+    {
+      "month": 12,
+      "customers": 18,
+      "arpa": 1200,
+      "revenue": 21600,
+      "cogs": 2592,
+      "opex": 37000,
+      "net_burn": 17992,
+      "cash_flow": -17992
+    }
+  ]
+}

@@ -67,11 +67,14 @@ cp examples/questionnaire.example.json questionnaire.json
 
 # 3. Run
 export OPENAI_API_KEY="sk-..."
-export XAI_API_KEY="xai-..."  # optional, for richer web research
 businessclaw run --config config.businessclaw.yaml --answers questionnaire.json
 ```
 
 Output → `artifacts/abc-YYYYMMDD-HHMMSS/` — plan, research, critiques, financials, HTML, and optional Obsidian vault.
+
+**Credential model:**
+- **Standalone CLI:** provide only `OPENAI_API_KEY`
+- **OpenClaw orchestration:** no extra key is required by this project; web research should come from the OpenClaw installation's own capabilities
 
 <details>
 <summary>📝 Minimum required config</summary>
@@ -110,7 +113,7 @@ output:
 | **🧩 Staged Pipeline** | 12 explicit stages, each with artifacts, checkpoints, and resumability |
 | **🤖 Multi-Agent Critique** | Investor, potential client, salesman, and expert personas challenge the plan from different angles |
 | **⚔️ 10th-Man Protocol** | 9 pro agents argue the case for success, 1 dissenting agent argues the strongest credible failure case |
-| **🌐 Web-Aware Research** | OpenClaw/xAI/OpenAI-compatible research path with deterministic fallback when web is unavailable |
+| **🌐 Web-Aware Research** | Uses orchestrator-provided web search (for example OpenClaw capabilities) when available, with deterministic fallback when not |
 | **🪨 Obsidian Export** | Full vault export with MOC, markdown notes, and canvas for further iteration |
 | **🖥️ Reviewable HTML** | Human-readable report for quick inspection and sharing |
 
@@ -128,10 +131,15 @@ If you already use OpenClaw as your assistant:
 1️⃣ Share the repo URL with OpenClaw
 2️⃣ OpenClaw reads AUTOBUSINESSPLANCLAW_AGENTS.md
 3️⃣ You describe the business idea
-4️⃣ OpenClaw fills the questionnaire, runs the pipeline, and returns outputs
+4️⃣ OpenClaw runs the pipeline in Gateway bridge mode, letting `businessclaw run` call the local Gateway for web search during execution
+5️⃣ OpenClaw returns the outputs
 ```
 
 **That’s it.** OpenClaw can guide config, collect founder input, execute the run, and return the HTML/vault/financial outputs.
+
+When run through OpenClaw, this project is expected to rely on **OpenClaw-provided capabilities** (including web research) instead of embedding a provider-specific search client inside the repo.
+
+For web research, the preferred pattern is **Gateway bridge mode**: `businessclaw run` can call the local OpenClaw Gateway directly during the run and use the installation's configured `web_search` capability. JSON injection remains available as a fallback/debug path.
 
 <details>
 <summary>💡 What happens under the hood</summary>

@@ -197,22 +197,60 @@ def build_market_queries(idea: str, answers: dict[str, str], region: str | None 
     return dedupe_queries(queries)
 
 
+def _infer_competitor_search_terms(idea: str, answers: dict[str, str]) -> list[str]:
+    text = f"{idea} {answers['problem']} {answers['current_solution']} {answers['mvp']} {answers['icp']}".lower()
+    if any(token in text for token in ["sorvete", "sacolé", "gelado", "geladinho", "sobremesa", "delivery"]):
+        return [
+            "sorvete artesanal",
+            "sacolé gourmet",
+            "geladinho gourmet",
+            "sobremesa delivery",
+            "marca local premium",
+            "doces gelados artesanais",
+        ]
+    if any(token in text for token in ["whatsapp", "agendamento", "agenda", "appointment", "scheduling"]):
+        return [
+            "whatsapp scheduling software",
+            "appointment scheduling software",
+            "agenda online para profissionais",
+            "automação de atendimento whatsapp",
+            "booking software",
+            "secretária virtual",
+        ]
+    if any(token in text for token in ["cyber", "security", "vulnerability", "appsec", "ciso"]):
+        return [
+            "cyber risk platform",
+            "vulnerability management",
+            "attack surface management",
+            "security consulting",
+            "risk prioritization software",
+            "security posture platform",
+        ]
+    return [
+        _compact_phrase(idea, 80),
+        _compact_phrase(answers["current_solution"], 80),
+        _compact_phrase(answers["mvp"], 80),
+        "alternatives",
+        "competitors",
+        "market leaders",
+    ]
+
+
 def build_competitor_queries(idea: str, answers: dict[str, str], region: str | None = None) -> list[str]:
     problem = _compact_phrase(answers["problem"])
     icp = _compact_phrase(answers["icp"])
     current = _compact_phrase(answers["current_solution"])
-    mvp = _compact_phrase(answers["mvp"])
     idea_short = _compact_phrase(idea)
     region_hint = _region_hint(region)
     suffix = f" {region_hint}" if region_hint else ""
+    terms = _infer_competitor_search_terms(idea, answers)
     queries = [
-        f'{problem} software competitors{suffix}',
-        f'{icp} alternatives to {idea_short}{suffix}',
-        f'{current} vendor comparison{suffix}',
-        f'{mvp} competitors pricing{suffix}',
-        f'{icp} scheduling automation tools{suffix}',
-        f'{icp} whatsapp automation tools{suffix}',
+        f'{idea_short} competitors{suffix}',
+        f'{problem} alternatives {icp}{suffix}',
+        f'{current} alternatives{suffix}',
     ]
+    queries.extend(f'{term} {suffix}'.strip() for term in terms[:3])
+    queries.extend(f'{icp} {term}{suffix}' for term in terms[3:6])
     return dedupe_queries(queries)
 
 
@@ -326,7 +364,10 @@ def _summarize_positioning(text: str) -> str:
 
 
 def _infer_icp_fit(name: str, evidence: str, default_icp: str) -> str:
-    lowered = f"{name} {evidence}".lower()
+    if evidence.startswith("heuristic://"):
+        lowered = name.lower()
+    else:
+        lowered = f"{name} {evidence}".lower()
     matches = []
     if any(tok in lowered for tok in ["psic", "mental"]):
         matches.append("psicólogos")
@@ -348,13 +389,32 @@ def _infer_icp_fit(name: str, evidence: str, default_icp: str) -> str:
 
 
 
+def _infer_solution_frame(idea_name: str, answers: dict[str, str]) -> tuple[str, str]:
+    text = f"{idea_name} {answers['problem']} {answers['mvp']} {answers['current_solution']}".lower()
+    if any(token in text for token in ["sorvete", "sacolé", "gelado", "geladinho", "sobremesa", "delivery"]):
+        return (
+            "Instagram / WhatsApp / delivery / pontos físicos leves",
+            "Compete pela mesma ocasião de consumo, canal de compra ou percepção de marca no mercado local.",
+        )
+    if any(token in text for token in ["whatsapp", "agendamento", "agenda", "appointment", "scheduling"]):
+        return (
+            "WhatsApp-first + dashboard web",
+            "Competes with or overlaps the idea on scheduling automation / workflow outsourcing.",
+        )
+    return (
+        "Digital / service / distribution inferred",
+        "Competes with or overlaps the core job-to-be-done targeted by the idea.",
+    )
+
+
 def build_comparison_rows(competitors: list[dict[str, str]], idea_name: str, answers: dict[str, str]) -> list[dict[str, str]]:
+    our_channel, comparison_frame = _infer_solution_frame(idea_name, answers)
     rows = [
         {
             "name": idea_name,
             "type": "our_idea",
             "icp_fit": _clean_text(answers["icp"])[:120],
-            "channel": "WhatsApp-first + dashboard web",
+            "channel": our_channel,
             "pricing": "TBD / validation stage",
             "positioning": _clean_text(answers["problem"])[:180],
             "strengths": _clean_text(answers["advantage"])[:180],
@@ -364,18 +424,19 @@ def build_comparison_rows(competitors: list[dict[str, str]], idea_name: str, ans
         }
     ]
     default_icp = _clean_text(answers["icp"])
+    competitor_channel = "Market / distribution / positioning inferred"
     for competitor in competitors:
         evidence = competitor.get("evidence", "")
         rows.append({
             "name": competitor.get("name", "Unknown"),
             "type": competitor.get("type", "unknown"),
             "icp_fit": _infer_icp_fit(competitor.get("name", ""), evidence, default_icp),
-            "channel": "Web / scheduling / WhatsApp / inferred",
+            "channel": competitor_channel,
             "pricing": competitor.get("pricing", "Desconhecido"),
             "positioning": _summarize_positioning(competitor.get("positioning", "")),
             "strengths": competitor.get("strengths", "")[:180],
             "weaknesses": competitor.get("weaknesses", "")[:180],
-            "comparison_to_idea": "Competes with or overlaps the idea on scheduling automation / workflow outsourcing.",
+            "comparison_to_idea": comparison_frame,
             "evidence": evidence,
         })
     return rows
@@ -434,34 +495,95 @@ def fallback_evidence(idea: str, answers: dict[str, str]) -> list[EvidenceItem]:
     ]
 
 
-def fallback_competitors(answers: dict[str, str]) -> list[dict[str, str]]:
-    niche = answers["icp"]
+def fallback_competitors(answers: dict[str, str], idea: str = "") -> list[dict[str, str]]:
+    text = f"{idea} {answers['problem']} {answers['current_solution']} {answers['mvp']} {answers['icp']}".lower()
+    niche = _clean_text(answers["icp"])
+    if any(token in text for token in ["sorvete", "sacolé", "gelado", "geladinho", "sobremesa", "delivery"]):
+        return [
+            {
+                "name": "Sorveterias artesanais locais",
+                "type": "direct",
+                "positioning": "Marcas locais de sorvetes e gelados artesanais com apelo premium e operação regional.",
+                "strengths": "Marca visível, recorrência local, ticket conhecido pelo consumidor.",
+                "weaknesses": "Nem sempre focam delivery leve, branding enxuto ou formato de consumo impulsivo do sacolé gourmet.",
+                "pricing": "Ticket unitário / combo",
+                "evidence": "heuristic://local-artisanal-ice-cream-brands",
+            },
+            {
+                "name": "Docerias e sobremesas por delivery",
+                "type": "indirect",
+                "positioning": "Dark kitchens e marcas de sobremesa que competem pela mesma ocasião de consumo no delivery.",
+                "strengths": "Forte presença em apps e conveniência de compra.",
+                "weaknesses": "Estrutura mais pesada e menos foco no formato gelado artesanal de baixo atrito.",
+                "pricing": "Delivery / combo",
+                "evidence": "heuristic://dessert-delivery-players",
+            },
+            {
+                "name": "Marcas industriais e informais",
+                "type": "status_quo",
+                "positioning": "Picolés industriais, sacolés informais e alternativas baratas já conhecidas do consumidor.",
+                "strengths": "Preço baixo e hábito já estabelecido.",
+                "weaknesses": "Baixa diferenciação premium, branding fraco e experiência menos memorável.",
+                "pricing": "Baixo",
+                "evidence": "heuristic://incumbent-cheap-alternatives",
+            },
+        ]
+    if any(token in text for token in ["whatsapp", "agendamento", "agenda", "appointment", "scheduling"]):
+        return [
+            {
+                "name": "Agenda online vertical",
+                "type": "direct",
+                "positioning": f"Software de agendamento voltado ao ICP {niche}.",
+                "strengths": "Fluxo conhecido, proposta direta, cobrança recorrente simples.",
+                "weaknesses": "Pode não cobrir atendimento operacional mais amplo nem experiência conversacional forte.",
+                "pricing": "SaaS mensal",
+                "evidence": "heuristic://vertical-scheduling-software",
+            },
+            {
+                "name": "Ferramenta de automação WhatsApp",
+                "type": "direct",
+                "positioning": "Plataformas que automatizam mensagens e partes do atendimento no WhatsApp.",
+                "strengths": "Canal aderente ao hábito do usuário.",
+                "weaknesses": "Nem sempre resolvem agenda, remarcação e operação ponta a ponta.",
+                "pricing": "SaaS mensal",
+                "evidence": "heuristic://whatsapp-automation-tools",
+            },
+            {
+                "name": "Secretariado manual / status quo",
+                "type": "status_quo",
+                "positioning": "Atendimento manual por recepção, assistente ou pelo próprio profissional.",
+                "strengths": "Sem adoção de ferramenta nova.",
+                "weaknesses": "Baixa escala, retrabalho, erro operacional e pouca previsibilidade.",
+                "pricing": "Baixo ou implícito",
+                "evidence": "heuristic://manual-scheduling-status-quo",
+            },
+        ]
     return [
         {
-            "name": "Status quo / planilhas",
+            "name": "Status quo",
             "type": "status_quo",
-            "positioning": f"Equipes de {niche} usando processos manuais",
-            "strengths": "Baixo custo inicial, nenhuma adoção nova necessária",
-            "weaknesses": "Baixa escala, priorização fraca, pouca automação",
+            "positioning": f"ICP {niche} resolvendo o problema com processo atual/manual.",
+            "strengths": "Sem migração imediata e baixo custo percebido.",
+            "weaknesses": "Escalabilidade e diferenciação limitadas.",
             "pricing": "Baixo ou implícito",
-            "evidence": answers["current_solution"],
+            "evidence": "heuristic://status-quo",
         },
         {
-            "name": "Consultoria especializada",
+            "name": "Consultoria / serviço especializado",
             "type": "indirect",
-            "positioning": "Serviço humano para resolver ou priorizar o problema",
-            "strengths": "Profundidade técnica, credibilidade",
-            "weaknesses": "Escala ruim, custo alto, dependência de horas humanas",
+            "positioning": "Serviço humano que resolve o problema sem virar software ou produto escalável.",
+            "strengths": "Profundidade e customização.",
+            "weaknesses": "Custo alto, baixa escala, margem pressionada.",
             "pricing": "Projeto / retainer",
-            "evidence": answers["problem"],
+            "evidence": "heuristic://specialized-service",
         },
         {
-            "name": "Ferramenta horizontal existente",
+            "name": "Produto horizontal existente",
             "type": "direct",
-            "positioning": "Ferramenta genérica que resolve parte da dor",
-            "strengths": "Já conhecida pelo mercado, onboarding mais fácil",
-            "weaknesses": "Pode gerar ruído ou não atacar o fluxo exato do ICP",
+            "positioning": "Ferramenta generalista que resolve parte do fluxo, sem ser desenhada exatamente para esta tese.",
+            "strengths": "Mercado educado e onboarding conhecido.",
+            "weaknesses": "Aderência incompleta ao problema central.",
             "pricing": "SaaS",
-            "evidence": answers["why_now"],
+            "evidence": "heuristic://horizontal-tool",
         },
     ]

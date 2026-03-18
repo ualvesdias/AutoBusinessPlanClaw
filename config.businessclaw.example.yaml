@@ -23,3 +23,11 @@ llm:
 
 output:
   root: "artifacts"
+
+openclaw_bridge:
+  enabled: false
+  gateway_url: "http://127.0.0.1:18789"
+  gateway_token_env: "OPENCLAW_GATEWAY_TOKEN"
+  use_gateway_web_search: true
+  use_web_search_injection: false
+  web_search_results_path: "web_search_results.json"

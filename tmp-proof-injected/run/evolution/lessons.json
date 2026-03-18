@@ -1,0 +1,20 @@
+[
+  {
+    "severity": "warning",
+    "topic": "external_research_coverage",
+    "lesson": "When no orchestrator-provided web research is available, mark competition as heuristic and avoid presenting archetypes as validated competitors.",
+    "expires_in_days": 30
+  },
+  {
+    "severity": "warning",
+    "topic": "heuristic_competition",
+    "lesson": "Heuristic competitors should be niche-specific archetypes with explicit heuristic evidence labels, never founder answer text as evidence.",
+    "expires_in_days": 30
+  },
+  {
+    "severity": "info",
+    "topic": "revision_loop",
+    "lesson": "Preserve critique and debate outputs separately from the business plan body to reduce duplication in exports.",
+    "expires_in_days": 30
+  }
+]

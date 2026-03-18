@@ -1,10 +1,20 @@
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+*.log
+
+# generated run/output directories
+runs/
 artifacts/
 exports/
-.pytest_cache/
+
+# local validation / scratch files
+/tmp-*
+tmp-*/
 tmp-proof/
 tmp-proof-injected/
 tmp-gateway-bridge/
-*.log
+
+# python cache folders anywhere
+**/__pycache__/

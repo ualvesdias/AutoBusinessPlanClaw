@@ -66,7 +66,7 @@ def load_config(path: str | Path) -> ABCConfig:
             openclaw_api_key_env=str(llm.get("openclaw_api_key_env", "OPENCLAW_GATEWAY_TOKEN")),
             openclaw_model=str(llm.get("openclaw_model", "openclaw:main")),
         ),
-        output=OutputConfig(root=str(output.get("root", "artifacts"))),
+        output=OutputConfig(root=str(output.get("root", "runs"))),
     )
 
 

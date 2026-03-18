@@ -11,6 +11,7 @@ from rich.console import Console
 from .config import ConfigError, load_config, load_questionnaire
 from .health import run_doctor, write_doctor_report
 from .html_export import export_run_to_html
+from .llm import OpenAICompatibleClient
 from .obsidian import export_run_to_obsidian
 from .pipeline import Pipeline
 from .questionnaire import REQUIRED_QUESTIONS
@@ -19,69 +20,155 @@ from .research import normalize_evidence
 console = Console()
 
 
-def _call_xai_web_search(query: str, count: int) -> list[dict[str, Any]]:
-    try:
-        import os
-        import requests
-    except ImportError:
-        return []
-
-    api_key = os.getenv("XAI_API_KEY", "")
-    if not api_key:
-        return []
-    response = requests.post(
-        "https://api.x.ai/v1/responses",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={
-            "model": "grok-4.20-beta-latest-non-reasoning",
-            "input": [{"role": "user", "content": f"Search the web and return concrete findings for: {query}"}],
-            "tools": [{"type": "web_search"}],
-            "temperature": 0.1,
-        },
-        timeout=(10, 90),
-    )
-    if response.status_code >= 400:
-        return []
-    payload = response.json()
-    output = payload.get("output") or []
-
+def _parse_responses_payload(payload: dict[str, Any], provider_label: str, query: str, count: int) -> list[dict[str, Any]]:
     text_chunks: list[str] = []
     page_urls: list[str] = []
     search_queries: list[str] = []
-    for item in output:
+
+    output_text = payload.get("output_text")
+    if isinstance(output_text, str) and output_text.strip():
+        text_chunks.append(output_text.strip())
+
+    for item in payload.get("output") or []:
         if not isinstance(item, dict):
             continue
-        if item.get("type") == "web_search_call":
-            action = item.get("action") or {}
-            if action.get("type") == "open_page" and action.get("url"):
-                page_urls.append(str(action.get("url")))
-            if action.get("type") == "search" and action.get("query"):
-                search_queries.append(str(action.get("query")))
+        action = item.get("action") or {}
+        if action.get("type") == "open_page" and action.get("url"):
+            page_urls.append(str(action.get("url")))
+        if action.get("type") == "search" and action.get("query"):
+            search_queries.append(str(action.get("query")))
         for content in item.get("content") or []:
-            if isinstance(content, dict) and content.get("type") == "output_text" and content.get("text"):
+            if not isinstance(content, dict):
+                continue
+            if content.get("type") == "output_text" and content.get("text"):
                 text_chunks.append(str(content.get("text")))
+            for annotation in content.get("annotations") or []:
+                if isinstance(annotation, dict) and annotation.get("url"):
+                    page_urls.append(str(annotation.get("url")))
 
-    summary = "\n\n".join(text_chunks).strip()
+    summary = "\n\n".join(chunk for chunk in text_chunks if chunk).strip()
+    page_urls = list(dict.fromkeys(url for url in page_urls if url))
+    search_queries = list(dict.fromkeys(q for q in search_queries if q))
+
     evidence: list[dict[str, Any]] = []
     if summary:
         evidence.append({
-            "title": f"xAI web synthesis: {query[:120]}",
-            "url": "xai://responses/web_search",
+            "title": f"{provider_label} web synthesis: {query[:120]}",
+            "url": f"{provider_label.lower()}://responses/web_search",
             "snippet": summary[:4000],
         })
     for idx, url in enumerate(page_urls[: max(3, min(count, 8))], start=1):
         evidence.append({
             "title": f"Web source {idx} for: {query[:80]}",
             "url": url,
-            "snippet": summary[:600] if summary else f"Derived from xAI web search for query: {query}",
+            "snippet": summary[:600] if summary else f"Derived from {provider_label} web search for query: {query}",
         })
     for idx, sq in enumerate(search_queries[:3], start=1):
         evidence.append({
             "title": f"Search trace {idx}",
-            "url": f"xai://search/{idx}",
+            "url": f"{provider_label.lower()}://search/{idx}",
             "snippet": sq,
         })
     return evidence
+
+
+def _call_responses_web_search(base_url: str, bearer: str, model: str, tool_type: str, provider_label: str, query: str, count: int) -> list[dict[str, Any]]:
+    try:
+        import requests
+    except ImportError:
+        return []
+    response = requests.post(
+        f"{base_url.rstrip('/')}/responses",
+        headers={"Authorization": f"Bearer {bearer}", "Content-Type": "application/json"},
+        json={
+            "model": model,
+            "input": [{"role": "user", "content": f"Search the web and return concrete findings for: {query}"}],
+            "tools": [{"type": tool_type}],
+            "temperature": 0.1,
+        },
+        timeout=(10, 90),
+    )
+    if response.status_code >= 400:
+        return []
+    return _parse_responses_payload(response.json(), provider_label, query, count)
+
+
+def _call_openclaw_web_search(config, query: str, count: int) -> list[dict[str, Any]]:
+    try:
+        client = OpenAICompatibleClient(config.llm)
+        token = client._openclaw_token()
+    except Exception:
+        return []
+    if not token:
+        return []
+    try:
+        return _call_responses_web_search(
+            base_url=config.llm.openclaw_base_url,
+            bearer=token,
+            model=config.llm.openclaw_model,
+            tool_type="web_search",
+            provider_label="openclaw",
+            query=query,
+            count=count,
+        )
+    except Exception:
+        return []
+
+
+def _call_openai_web_search(config, query: str, count: int) -> list[dict[str, Any]]:
+    try:
+        import os
+    except ImportError:
+        return []
+    api_key = os.getenv(config.llm.api_key_env, "")
+    if not api_key:
+        return []
+    try:
+        return _call_responses_web_search(
+            base_url=config.llm.base_url,
+            bearer=api_key,
+            model=config.llm.model,
+            tool_type="web_search_preview",
+            provider_label="openai",
+            query=query,
+            count=count,
+        )
+    except Exception:
+        return []
+
+
+def _call_xai_web_search(query: str, count: int) -> list[dict[str, Any]]:
+    try:
+        import os
+    except ImportError:
+        return []
+    api_key = os.getenv("XAI_API_KEY", "")
+    if not api_key:
+        return []
+    try:
+        return _call_responses_web_search(
+            base_url="https://api.x.ai/v1",
+            bearer=api_key,
+            model="grok-4.20-beta-latest-non-reasoning",
+            tool_type="web_search",
+            provider_label="xai",
+            query=query,
+            count=count,
+        )
+    except Exception:
+        return []
+
+
+def _web_search_cascade(config, query: str, count: int) -> list[dict[str, Any]]:
+    for provider in (
+        lambda: _call_openclaw_web_search(config, query, count),
+        lambda: _call_openai_web_search(config, query, count),
+        lambda: _call_xai_web_search(query, count),
+    ):
+        results = provider()
+        if results:
+            return results
+    return []
 
 
 def cmd_init_questionnaire(args: argparse.Namespace) -> int:
@@ -114,7 +201,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     pipeline = Pipeline(config)
 
     def web_search_wrapper(query: str, count: int):
-        raw = _call_xai_web_search(query, count)
+        raw = _web_search_cascade(config, query, count)
         return [vars(item) for item in normalize_evidence(raw)]
 
     run_dir = pipeline.run(

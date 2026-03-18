@@ -33,7 +33,7 @@ Mirror the strengths of AutoResearchClaw that actually matter here:
 - final markdown plan
 - JSON stage artifacts
 - checkpoint metadata
-- financial CSV/TSV
+- financial CSV/TSV + financial analysis markdown
 - competitor matrix CSV/Markdown/JSON
 - GTM experiment memo
 - critique history
@@ -75,16 +75,60 @@ A final synthesis memo combines:
 That synthesis becomes core material for the business plan's risk section.
 
 ## Competition stage
-The competition stage maps direct, indirect, and status-quo competition and exports a matrix.
+The competition stage no longer stops at URL extraction. It now has three internal substeps:
+1. competitor discovery from research evidence
+2. per-competitor evidence synthesis (positioning / strengths / weaknesses / pricing hints)
+3. quality gate evaluation (`analysis_quality`) to detect overuse of fallback text
+
 This improves:
 - competitive analysis
 - differentiation reasoning
 - GTM realism
 - risk modeling
+- artifact trustworthiness
+
+### Competition artifact contract
+Each competitor row now carries:
+- `analysis_status` (`analyzed` or `fallback`)
+- `analysis_source`
+- `evidence_count`
+- `evidence_excerpt`
+
+The stage output also includes an `analysis_quality` block with analyzed/fallback counts and a `quality_gate_passed` flag.
 
 ## Next architectural upgrades
 - stage-level selective reruns
 - specialist expert personas by sub-vertical
-- competitor evidence normalization
+- stronger competitor evidence normalization and optional LLM-based analyst agents per competitor
 - pricing recommendation engine
 - interview-insight ingestion
+
+
+## Competitor analyst agent
+After discovery, each competitor candidate is passed through a dedicated analyst step. That step receives aggregated snippets/URLs for one competitor and must produce positioning, strengths, weaknesses, analysis status, and confidence.
+
+If the agent cannot support a claim from evidence, the row is explicitly marked as fallback rather than silently inheriting generic text.
+
+## Financial model agent
+The financial stage now has a dedicated financial-modeling agent. It receives the idea, founder answers, synthesis, critiques, competition context, and an inferred business archetype (for example: saas, services, marketplace, consumer_brand, food_beverage).
+
+If LLM output is unavailable or invalid, the pipeline falls back to an archetype-specific 12-month model instead of forcing everything into SaaS-style ARPA logic.
+
+## Run completion semantics
+A run can now finish with `run_status = complete` or `run_status = incomplete`.
+- `complete`: competition quality gate passed
+- `incomplete`: competition quality gate failed, meaning the final plan exists but competitive intelligence should not be treated as fully trustworthy
+
+
+## Financial model stage
+The financial stage now includes a dedicated financial-model agent. It receives the idea, founder questionnaire, synthesis, critiques, and inferred business archetype, then returns a structured 12-month model.
+
+### Financial artifact contract
+The stage writes:
+- `business_archetype`
+- `assumptions`
+- `rows` (12 months)
+- `analysis.intelligence_paragraph`
+- `analysis.recommendations`
+
+If the agent output is invalid or unavailable, the pipeline uses an archetype-specific fallback model rather than a one-size-fits-all SaaS template. A second finance-analysis pass then summarizes the model and emits recommendations.

@@ -15,21 +15,31 @@ from .prompts import (
     CRITIC_PROMPT,
     REVISION_PROMPT,
     TENTH_MAN_PROMPT,
+    COMPETITOR_ANALYST_PROMPT,
+    FINANCIAL_MODEL_PROMPT,
+    FINANCIAL_INTELLIGENCE_PROMPT,
+    QUERY_SPECIALIST_PROMPT,
+    FINANCIAL_MODEL_PROMPT,
+    FINANCIAL_INTELLIGENCE_PROMPT,
     master_critique_prompt,
     persona_prompt,
     planning_prompt,
     pro_agent_prompt,
 )
 from .research import (
+    GENERIC_POSITIONING_FALLBACK,
+    GENERIC_STRENGTHS_FALLBACK,
+    GENERIC_WEAKNESSES_FALLBACK,
     build_comparison_rows,
+    build_competitor_quality,
     build_competitor_queries,
     build_evidence_summary,
     build_market_queries,
     dedupe_evidence,
-    extract_competitors_from_evidence,
     fallback_competitors,
     fallback_evidence,
     normalize_evidence,
+    prepare_competitor_candidates,
     write_comparison_exports,
 )
 
@@ -49,7 +59,12 @@ class Pipeline:
         resume: bool = False,
     ) -> Path:
         run_id = datetime.now(UTC).strftime("abc-%Y%m%d-%H%M%S")
-        run_dir = Path(output_dir or Path(self.config.output.root) / run_id)
+        root_dir = Path(self.config.output.root)
+        if output_dir is None:
+            run_dir = root_dir / run_id
+        else:
+            candidate = Path(output_dir)
+            run_dir = candidate if candidate.is_absolute() else (candidate if candidate.parts and candidate.parts[0] == root_dir.name else root_dir / candidate)
         self._prepare_run_dir(run_dir, resume=resume)
         run_dir.mkdir(parents=True, exist_ok=True)
         stages_dir = run_dir / "stages"
@@ -67,7 +82,7 @@ class Pipeline:
         def stage_done(stage: Stage) -> bool:
             return stage.value in completed
 
-        queries = build_market_queries(self.config.business.idea, answers, region=self.config.business.region)
+        queries = self._build_market_queries(answers)
         raw_research: list[dict[str, Any]] = self._safe_read_json(run_dir / "research_results.json", []) if resume else []
         evidence_data = self._safe_read_json(stages_dir / f"{Stage.MARKET_RESEARCH.value}.json", {}) if resume else {}
         evidence: list[EvidenceItem] = []
@@ -174,9 +189,12 @@ class Pipeline:
                 current_plan = final_revision.read_text(encoding="utf-8")
 
         if not stage_done(Stage.FINANCIALS):
-            finance_rows = self._build_financial_rows(answers)
-            self._write_financial_exports(exports_dir, finance_rows)
-            self._write_stage(stages_dir, Stage.FINANCIALS, {"rows": finance_rows})
+            finance_model = self._build_financial_model(answers, synthesis, persona_critiques, tenth_man_report, current_plan)
+            finance_analysis = self._build_financial_intelligence(finance_model)
+            finance_payload = {**finance_model, "analysis": finance_analysis}
+            self._write_financial_exports(exports_dir, finance_model["rows"])
+            (exports_dir / "financial_analysis.md").write_text(self._render_financial_analysis_markdown(finance_analysis), encoding="utf-8")
+            self._write_stage(stages_dir, Stage.FINANCIALS, finance_payload)
             self._mark_stage_complete(checkpoint_path, Stage.FINANCIALS, completed)
 
         if not stage_done(Stage.GTM_PACK):
@@ -188,6 +206,8 @@ class Pipeline:
         (run_dir / "answers.json").write_text(json.dumps(answers, indent=2, ensure_ascii=False), encoding="utf-8")
         (run_dir / "business_plan.md").write_text(current_plan, encoding="utf-8")
 
+        competition_quality = (competition or {}).get("analysis_quality", {}) if isinstance(competition, dict) else {}
+        run_status = "complete" if competition_quality.get("quality_gate_passed", True) else "incomplete"
         summary = {
             "idea": self.config.business.idea,
             "run_dir": str(run_dir),
@@ -198,6 +218,9 @@ class Pipeline:
             "critique_rounds": self.config.runtime.critique_rounds,
             "persona_count": len(self.PERSONAS),
             "pro_agent_count": self.config.runtime.pro_agent_count,
+            "competition_quality": competition_quality,
+            "run_status": run_status,
+            "warnings": (["Competition stage quality gate failed; treat output as incomplete competitive intelligence."] if run_status == "incomplete" else []),
             "completed_stages": sorted(completed),
         }
         (run_dir / "run_summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -234,7 +257,7 @@ class Pipeline:
                 path.unlink()
 
     def _build_competitor_matrix(self, answers: dict[str, str], web_search_fn=None) -> dict[str, Any]:
-        queries = build_competitor_queries(self.config.business.idea, answers, region=self.config.business.region)
+        queries = self._build_competitor_queries(answers)
         raw: list[dict[str, Any]] = []
         evidence_items: list[EvidenceItem] = []
         if self.config.runtime.allow_web_research and web_search_fn is not None:
@@ -252,15 +275,23 @@ class Pipeline:
                     raw.append({"query": query, "results": results})
                     evidence_items.extend(normalize_evidence(results))
 
-        competitors = extract_competitors_from_evidence(dedupe_evidence(evidence_items))
+        candidates = prepare_competitor_candidates(dedupe_evidence(evidence_items))
+        competitors = [self._analyze_competitor_candidate(candidate, answers) for candidate in candidates]
         if len(competitors) < 3:
-            fallback = fallback_competitors(answers)
+            fallback = fallback_competitors(answers, self.config.business.idea)
             existing = {c["name"].strip().lower() for c in competitors}
             for competitor in fallback:
                 key = competitor["name"].strip().lower()
                 if key not in existing:
-                    competitors.append(competitor)
+                    enriched = dict(competitor)
+                    enriched.setdefault("analysis_status", "fallback")
+                    enriched.setdefault("analysis_source", "heuristic_fallback")
+                    enriched.setdefault("evidence_count", "0")
+                    enriched.setdefault("evidence_excerpt", "")
+                    enriched.setdefault("confidence", "low")
+                    competitors.append(enriched)
                     existing.add(key)
+        quality = build_competitor_quality(competitors, raw_candidate_count=len(candidates))
 
         return {
             "queries": queries,
@@ -270,6 +301,169 @@ class Pipeline:
                 "raw_result_batches": len(raw),
                 "competitor_count": len(competitors),
             },
+            "analysis_quality": quality,
+        }
+
+    def _build_market_queries(self, answers: dict[str, str]) -> list[str]:
+        fallback = build_market_queries(self.config.business.idea, answers, region=self.config.business.region)
+        return self._query_specialist_agent("market_research", answers, fallback)
+
+    def _build_competitor_queries(self, answers: dict[str, str]) -> list[str]:
+        fallback = build_competitor_queries(self.config.business.idea, answers, region=self.config.business.region)
+        return self._query_specialist_agent("competition", answers, fallback)
+
+    def _query_specialist_agent(self, intent: str, answers: dict[str, str], fallback: list[str]) -> list[str]:
+        prompt = (
+            f"Intent: {intent}\n"
+            f"Idea: {self.config.business.idea}\n"
+            f"Region: {self.config.business.region}\n"
+            f"Business model hint: {self.config.business.business_model_hint}\n"
+            f"Founder answers: {json.dumps(answers, ensure_ascii=False)}\n"
+            f"Fallback heuristic queries: {json.dumps(fallback, ensure_ascii=False)}\n"
+            "Return strict JSON only."
+        )
+        stage_name = f"query_specialist_{intent}"
+        self._record_prompt(stage_name, QUERY_SPECIALIST_PROMPT, prompt)
+        try:
+            if self.client.is_configured():
+                raw = self.client.complete(QUERY_SPECIALIST_PROMPT, prompt)
+                self._record_response(stage_name, raw)
+                parsed = self._parse_competitor_analysis_json(raw)
+                if isinstance(parsed, dict) and isinstance(parsed.get("queries"), list):
+                    cleaned = [str(q).strip() for q in parsed["queries"] if str(q).strip()]
+                    deduped = []
+                    seen = set()
+                    for q in cleaned:
+                        key = q.lower()
+                        if key not in seen:
+                            seen.add(key)
+                            deduped.append(q)
+                    if len(deduped) >= 4:
+                        return deduped[:10]
+        except LLMError as exc:
+            self._record_response(stage_name, f"LLM_ERROR: {exc}")
+        return fallback
+
+    def _analyze_competitor_candidate(self, candidate: dict[str, Any], answers: dict[str, str]) -> dict[str, str]:
+        fallback = self._fallback_competitor_analysis(candidate)
+        prompt = (
+            f"Idea: {self.config.business.idea}\n"
+            f"ICP: {answers['icp']}\n"
+            f"Problem: {answers['problem']}\n"
+            f"Competitor name: {candidate.get('name', 'Unknown')}\n"
+            f"Competitor type: {candidate.get('type', 'indirect')}\n"
+            f"Competitor domain: {candidate.get('domain', '')}\n"
+            f"Pricing hint: {candidate.get('pricing', 'Desconhecido')}\n"
+            f"Evidence count: {candidate.get('evidence_count', 0)}\n"
+            f"Evidence URLs: {json.dumps(candidate.get('evidence_urls', []), ensure_ascii=False)}\n"
+            f"Evidence snippets: {json.dumps(candidate.get('evidence_snippets', []), ensure_ascii=False)}\n"
+            "Return strict JSON only."
+        )
+        stage_name = f"competitor_analyst_{str(candidate.get('name', 'unknown')).lower().replace(' ', '_')}"
+        self._record_prompt(stage_name, COMPETITOR_ANALYST_PROMPT, prompt)
+        try:
+            if self.client.is_configured():
+                raw = self.client.complete(COMPETITOR_ANALYST_PROMPT, prompt)
+                self._record_response(stage_name, raw)
+                parsed = self._parse_competitor_analysis_json(raw)
+                if parsed:
+                    result = {
+                        "name": str(candidate.get("name", "Unknown")),
+                        "type": str(candidate.get("type", "indirect")),
+                        "positioning": str(parsed.get("positioning") or fallback["positioning"]),
+                        "strengths": str(parsed.get("strengths") or fallback["strengths"]),
+                        "weaknesses": str(parsed.get("weaknesses") or fallback["weaknesses"]),
+                        "pricing": str(candidate.get("pricing", "Desconhecido")),
+                        "evidence": str(candidate.get("evidence", "")),
+                        "analysis_status": str(parsed.get("analysis_status") or "analyzed"),
+                        "analysis_source": "competitor_analyst_agent",
+                        "evidence_count": str(candidate.get("evidence_count", 0)),
+                        "evidence_excerpt": str(candidate.get("evidence_excerpt", "")),
+                        "confidence": str(parsed.get("confidence") or "medium"),
+                    }
+                    if result["analysis_status"] not in {"analyzed", "fallback"}:
+                        result["analysis_status"] = "analyzed"
+                    return result
+        except LLMError as exc:
+            self._record_response(stage_name, f"LLM_ERROR: {exc}")
+        return fallback
+
+    def _parse_competitor_analysis_json(self, raw: str) -> dict[str, Any] | None:
+        raw = (raw or "").strip()
+        if not raw:
+            return None
+        candidates = [raw]
+        if "```json" in raw:
+            candidates.append(raw.split("```json", 1)[1].split("```", 1)[0].strip())
+        elif "```" in raw:
+            candidates.append(raw.split("```", 1)[1].split("```", 1)[0].strip())
+        for candidate in candidates:
+            try:
+                data = json.loads(candidate)
+            except json.JSONDecodeError:
+                start = candidate.find("{")
+                end = candidate.rfind("}")
+                if start != -1 and end != -1 and end > start:
+                    try:
+                        data = json.loads(candidate[start:end + 1])
+                    except json.JSONDecodeError:
+                        continue
+                else:
+                    continue
+            if isinstance(data, dict):
+                return data
+        return None
+
+    def _fallback_competitor_analysis(self, candidate: dict[str, Any]) -> dict[str, str]:
+        snippets = list(candidate.get("evidence_snippets", []))
+        domain = str(candidate.get("domain", ""))
+        joined = " ".join(snippets).lower()
+        positioning = GENERIC_POSITIONING_FALLBACK
+        if any(tok in joined for tok in ["supplier", "fornecedor", "fornecedores"]):
+            positioning = "Plataforma focada em fornecedores, cadastro e relacionamento operacional."
+        elif any(tok in joined for tok in ["third party", "terceiros", "vendor risk"]):
+            positioning = "Solução voltada à gestão e avaliação de risco de terceiros."
+        elif any(tok in joined for tok in ["due diligence", "background check"]):
+            positioning = "Ferramenta de due diligence e verificação de terceiros."
+        elif any(tok in joined for tok in ["onboarding", "homolog"]):
+            positioning = "Ferramenta de onboarding, homologação e coleta documental de fornecedores."
+        strengths = GENERIC_STRENGTHS_FALLBACK
+        if snippets:
+            signals = []
+            if any(tok in joined for tok in ["compliance", "risk", "risco", "due diligence"]):
+                signals.append("há sinais de foco em risco/compliance")
+            if any(tok in joined for tok in ["onboarding", "homolog", "document", "cadastro"]):
+                signals.append("endereça onboarding documental")
+            if any(tok in joined for tok in ["platform", "plataforma", "portal", "software", "saas"]):
+                signals.append("parece ter proposta clara de software B2B")
+            if signals:
+                strengths = "Pelas evidências agregadas, parece forte porque " + "; ".join(signals[:3]) + "."
+        weaknesses = GENERIC_WEAKNESSES_FALLBACK
+        concerns = []
+        if not any(tok in joined for tok in ["pricing", "preço", "r$", "usd", "/mês", "per month"]):
+            concerns.append("pricing não apareceu de forma clara")
+        if not any(tok in joined for tok in ["security", "segurança", "risk", "risco", "tprm", "due diligence"]):
+            concerns.append("a profundidade específica do motor de risco não ficou comprovada")
+        if str(candidate.get("type", "indirect")) != "direct":
+            concerns.append("a aderência ao caso central parece parcial")
+        if any(k in domain for k in ["sap", "ariba", "coupa", "softexpert"]):
+            concerns.append("pode ser enterprise demais para operações mais enxutas")
+        if concerns:
+            weaknesses = "Possíveis fragilidades: " + "; ".join(concerns[:3]) + "."
+        status = "analyzed" if snippets else "fallback"
+        return {
+            "name": str(candidate.get("name", "Unknown")),
+            "type": str(candidate.get("type", "indirect")),
+            "positioning": positioning,
+            "strengths": strengths,
+            "weaknesses": weaknesses,
+            "pricing": str(candidate.get("pricing", "Desconhecido")),
+            "evidence": str(candidate.get("evidence", "")),
+            "analysis_status": status,
+            "analysis_source": "competitor_analyst_fallback",
+            "evidence_count": str(candidate.get("evidence_count", 0)),
+            "evidence_excerpt": str(candidate.get("evidence_excerpt", "")),
+            "confidence": "medium" if snippets else "low",
         }
 
     def _generate_plan(self, answers, evidence, synthesis, persona_critiques, tenth_man_report) -> str:
@@ -411,6 +605,227 @@ class Pipeline:
         self._record_response(stage_name, result)
         return result
 
+    def _infer_business_archetype(self, answers: dict[str, str]) -> str:
+        text = " ".join([self.config.business.idea, self.config.business.business_model_hint, *answers.values()]).lower()
+        if any(tok in text for tok in ["saas", "software", "dashboard", "platform", "plataforma", "api", "workflow"]):
+            return "saas"
+        if any(tok in text for tok in ["consultoria", "agency", "service", "serviço", "fração", "outsourcing"]):
+            return "services"
+        if any(tok in text for tok in ["marketplace", "take rate", "seller", "buyer", "comissão"]):
+            return "marketplace"
+        if any(tok in text for tok in ["sacolé", "geladinho", "picolé", "food", "beverage", "cafeteria", "sorvete", "sobremesa", "restaurant"]):
+            return "food_beverage"
+        if any(tok in text for tok in ["marca", "ecommerce", "d2c", "retail", "consumer", "produto físico"]):
+            return "consumer_brand"
+        return "other"
+
+    def _build_financial_model(self, answers, synthesis, competition, persona_critiques, tenth_man_report) -> dict[str, Any]:
+        archetype = self._infer_business_archetype(answers)
+        fallback = self._fallback_financial_model(answers, archetype)
+        prompt = (
+            f"Idea: {self.config.business.idea}\n"
+            f"Region: {self.config.business.region}\n"
+            f"Currency: {self.config.business.currency}\n"
+            f"Business archetype: {archetype}\n"
+            f"Founder answers: {json.dumps(answers, ensure_ascii=False)}\n"
+            f"Synthesis: {json.dumps(synthesis, ensure_ascii=False)}\n"
+            f"Competition: {json.dumps((competition or {}).get('competitors', []), ensure_ascii=False)}\n"
+            f"Persona critiques: {json.dumps(persona_critiques, ensure_ascii=False)}\n"
+            f"10th man: {json.dumps(tenth_man_report, ensure_ascii=False)}\n"
+            f"Fallback model: {json.dumps(fallback, ensure_ascii=False)}\n"
+            "Return strict JSON only."
+        )
+        stage_name = "financial_model_agent"
+        self._record_prompt(stage_name, FINANCIAL_MODEL_PROMPT, prompt)
+        try:
+            if self.client.is_configured():
+                raw = self.client.complete(FINANCIAL_MODEL_PROMPT, prompt)
+                self._record_response(stage_name, raw)
+                parsed = self._parse_competitor_analysis_json(raw)
+                normalized = self._normalize_financial_model(parsed, fallback)
+                if normalized:
+                    return normalized
+        except LLMError as exc:
+            self._record_response(stage_name, f"LLM_ERROR: {exc}")
+        self._record_response(stage_name, json.dumps(fallback, ensure_ascii=False))
+        return fallback
+
+    def _normalize_financial_model(self, parsed: dict[str, Any] | None, fallback: dict[str, Any]) -> dict[str, Any] | None:
+        if not isinstance(parsed, dict):
+            return None
+        rows = parsed.get("rows")
+        if not isinstance(rows, list) or len(rows) != 12:
+            return None
+        normalized_rows = []
+        for idx, row in enumerate(rows, start=1):
+            if not isinstance(row, dict):
+                return None
+            try:
+                customers_or_orders = int(float(row.get("customers_or_orders", 0)))
+                avg_ticket_or_arpa = round(float(row.get("avg_ticket_or_arpa", 0)), 2)
+                revenue = round(float(row.get("revenue", 0)), 2)
+                cogs = round(float(row.get("cogs", 0)), 2)
+                gross_profit = round(float(row.get("gross_profit", revenue - cogs)), 2)
+                opex = round(float(row.get("opex", 0)), 2)
+                cash_flow = round(float(row.get("cash_flow", gross_profit - opex)), 2)
+            except Exception:
+                return None
+            normalized_rows.append({
+                "month": idx,
+                "customers_or_orders": customers_or_orders,
+                "avg_ticket_or_arpa": avg_ticket_or_arpa,
+                "revenue": revenue,
+                "cogs": cogs,
+                "gross_profit": gross_profit,
+                "opex": opex,
+                "cash_flow": cash_flow,
+                "notes": str(row.get("notes", "")).strip(),
+            })
+        return {
+            "business_archetype": str(parsed.get("business_archetype") or fallback["business_archetype"]),
+            "assumptions": parsed.get("assumptions") or fallback["assumptions"],
+            "rows": normalized_rows,
+        }
+
+    def _build_financial_intelligence(self, finance_model: dict[str, Any]) -> dict[str, Any]:
+        fallback = self._fallback_financial_intelligence(finance_model)
+        prompt = (
+            f"Business archetype: {finance_model.get('business_archetype', 'other')}\n"
+            f"Assumptions: {json.dumps(finance_model.get('assumptions', {}), ensure_ascii=False)}\n"
+            f"Rows: {json.dumps(finance_model.get('rows', []), ensure_ascii=False)}\n"
+            "Return strict JSON only."
+        )
+        stage_name = "financial_intelligence_agent"
+        self._record_prompt(stage_name, FINANCIAL_INTELLIGENCE_PROMPT, prompt)
+        try:
+            if self.client.is_configured():
+                raw = self.client.complete(FINANCIAL_INTELLIGENCE_PROMPT, prompt)
+                self._record_response(stage_name, raw)
+                parsed = self._parse_competitor_analysis_json(raw)
+                if isinstance(parsed, dict) and parsed.get("intelligence_paragraph") and isinstance(parsed.get("recommendations"), list):
+                    return {
+                        "intelligence_paragraph": str(parsed.get("intelligence_paragraph")).strip(),
+                        "recommendations": [str(x).strip() for x in parsed.get("recommendations", []) if str(x).strip()][:5],
+                        "analysis_source": "financial_intelligence_agent",
+                    }
+        except LLMError as exc:
+            self._record_response(stage_name, f"LLM_ERROR: {exc}")
+        self._record_response(stage_name, json.dumps(fallback, ensure_ascii=False))
+        return fallback
+
+    def _fallback_financial_intelligence(self, finance_model: dict[str, Any]) -> dict[str, Any]:
+        rows = finance_model.get("rows", [])
+        if not rows:
+            return {
+                "intelligence_paragraph": "O modelo financeiro ainda não possui dados suficientes para análise.",
+                "recommendations": ["Revisar premissas básicas do modelo financeiro."],
+                "analysis_source": "financial_intelligence_fallback",
+            }
+        first = rows[0]
+        last = rows[-1]
+        avg_margin = 0
+        if rows:
+            margins = []
+            for row in rows:
+                revenue = float(row.get("revenue", 0) or 0)
+                gross = float(row.get("gross_profit", 0) or 0)
+                margins.append((gross / revenue) if revenue > 0 else 0)
+            avg_margin = sum(margins) / len(margins)
+        paragraph = (
+            f"O modelo sugere um negócio do tipo {finance_model.get('business_archetype', 'other')} com crescimento de volume de "
+            f"{first.get('customers_or_orders', 0)} para {last.get('customers_or_orders', 0)} no horizonte de 12 meses. "
+            f"A margem bruta média implícita fica em torno de {round(avg_margin * 100, 1)}%, enquanto o fluxo de caixa mensal sai de "
+            f"{first.get('cash_flow', 0)} para {last.get('cash_flow', 0)}. Isso indica que a principal restrição financeira está em "
+            f"equilibrar crescimento comercial com disciplina de custos antes do break-even."
+        )
+        recs = [
+            "Reduzir ou segurar opex fixo até validar demanda recorrente com margem bruta saudável.",
+            "Testar aumento de ticket médio e mix de produtos/planos antes de acelerar aquisição paga.",
+            "Acompanhar margem bruta e payback mensalmente para decidir o momento de expandir operação.",
+        ]
+        return {
+            "intelligence_paragraph": paragraph,
+            "recommendations": recs,
+            "analysis_source": "financial_intelligence_fallback",
+        }
+
+    def _render_financial_analysis_markdown(self, analysis: dict[str, Any]) -> str:
+        lines = ["# Financial Intelligence", "", analysis.get("intelligence_paragraph", ""), "", "## Recommendations"]
+        for item in analysis.get("recommendations", []):
+            lines.append(f"- {item}")
+        return "\n".join(lines) + "\n"
+
+    def _fallback_financial_model(self, answers: dict[str, str], archetype: str) -> dict[str, Any]:
+        if archetype == "food_beverage":
+            tickets = [7, 7.2, 7.2, 7.5, 7.5, 7.8, 7.8, 8, 8, 8.2, 8.2, 8.5]
+            orders = [180, 260, 340, 420, 520, 620, 720, 820, 920, 1020, 1120, 1250]
+            cogs_ratio = 0.38
+            opex_base = 6500
+            notes = "food_beverage model based on order volume, average ticket, production/logistics COGS, and lean local operations"
+            revenue_model = "pedido × ticket médio"
+            pricing_logic = "ticket médio por unidade/combos e pequenos canais de revenda"
+            unit_logic = "margem bruta depende de insumos, embalagem, perdas e entrega"
+            cost_drivers = ["ingredientes", "embalagem", "logística fria", "mão de obra operacional", "eventos/revenda"]
+        elif archetype == "consumer_brand":
+            tickets = [90, 92, 94, 96, 98, 100, 102, 104, 106, 108, 110, 112]
+            orders = [25, 35, 45, 60, 75, 90, 105, 120, 140, 160, 180, 210]
+            cogs_ratio = 0.42
+            opex_base = 12000
+            notes = "consumer_brand model based on orders, average order value, inventory COGS, and marketing-heavy opex"
+            revenue_model = "pedidos × ticket médio"
+            pricing_logic = "ticket por pedido com mix entre produto principal e upsell"
+            unit_logic = "margem bruta depende de produto, frete subsidiado e devoluções"
+            cost_drivers = ["CMV", "frete", "performance marketing", "embalagem", "estoque"]
+        elif archetype == "services":
+            tickets = [3500, 3500, 4000, 4000, 4500, 4500, 5000, 5000, 5500, 5500, 6000, 6000]
+            orders = [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7]
+            cogs_ratio = 0.1
+            opex_base = 18000
+            notes = "services model based on active clients and average monthly contract value"
+            revenue_model = "clientes ativos × ticket mensal"
+            pricing_logic = "retainer/projeto com expansão gradual de ticket"
+            unit_logic = "COGS baixo; margem depende mais de horas da equipe"
+            cost_drivers = ["mão de obra", "vendas", "ferramentas", "viagens/projetos"]
+        else:
+            tickets = [1200, 1200, 1200, 1500, 1500, 1800, 1800, 2000, 2200, 2400, 2600, 2800]
+            orders = [1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18]
+            cogs_ratio = 0.12 if archetype == "saas" else 0.2
+            opex_base = 35000 if archetype == "saas" else 20000
+            notes = f"{archetype} fallback model"
+            revenue_model = "clientes × ticket"
+            pricing_logic = "ARPA/ticket crescente com prova de valor"
+            unit_logic = "margem depende do modelo operacional e aquisição"
+            cost_drivers = ["pessoas", "aquisição", "ferramentas", "operação"]
+        rows=[]
+        for month, volume in enumerate(orders, start=1):
+            avg_ticket=tickets[month-1]
+            revenue=round(volume*avg_ticket,2)
+            cogs=round(revenue*cogs_ratio,2)
+            gross_profit=round(revenue-cogs,2)
+            opex=round(opex_base + (month-1)* (250 if archetype in {"food_beverage","consumer_brand"} else 500),2)
+            cash_flow=round(gross_profit-opex,2)
+            rows.append({
+                "month": month,
+                "customers_or_orders": volume,
+                "avg_ticket_or_arpa": avg_ticket,
+                "revenue": revenue,
+                "cogs": cogs,
+                "gross_profit": gross_profit,
+                "opex": opex,
+                "cash_flow": cash_flow,
+                "notes": notes,
+            })
+        return {
+            "business_archetype": archetype,
+            "assumptions": {
+                "revenue_model": revenue_model,
+                "pricing_logic": pricing_logic,
+                "unit_economics_logic": unit_logic,
+                "main_cost_drivers": cost_drivers,
+            },
+            "rows": rows,
+        }
+
     def _build_synthesis(self, answers, evidence, competition) -> dict[str, Any]:
         return {
             "problem": answers["problem"],
@@ -426,35 +841,23 @@ class Pipeline:
             "competitor_names": [c["name"] for c in (competition or {}).get("competitors", [])],
         }
 
-    def _build_financial_rows(self, answers) -> list[dict[str, Any]]:
-        price = 3000 if "enterprise" in answers["icp"].lower() or "ciso" in answers["icp"].lower() else 1200
-        customers = [1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18]
-        rows = []
-        base_opex = 35000
-        for month, customer_count in enumerate(customers, start=1):
-            revenue = customer_count * price
-            cogs = max(500, int(revenue * 0.12))
-            opex = base_opex + (2000 if month > 6 else 0)
-            net = revenue - cogs - opex
-            rows.append({"month": month, "customers": customer_count, "arpa": price, "revenue": revenue, "cogs": cogs, "opex": opex, "net_burn": -net, "cash_flow": net})
-        return rows
-
     def _write_financial_exports(self, exports_dir: Path, rows: list[dict[str, Any]]) -> None:
+        fieldnames = ["month", "customers_or_orders", "avg_ticket_or_arpa", "revenue", "cogs", "gross_profit", "opex", "cash_flow", "notes"]
         csv_path = exports_dir / "financial_model.csv"
         with csv_path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
         tsv_path = exports_dir / "financial_model.xlsx-ready.tsv"
         with tsv_path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()), delimiter="\t")
+            writer = csv.DictWriter(handle, fieldnames=fieldnames, delimiter="\t")
             writer.writeheader()
             writer.writerows(rows)
 
     def _write_competitor_exports(self, exports_dir: Path, competitors: list[dict[str, str]]) -> None:
         csv_path = exports_dir / "competitor_matrix.csv"
         with csv_path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=["name", "type", "positioning", "strengths", "weaknesses", "pricing", "evidence"])
+            writer = csv.DictWriter(handle, fieldnames=["name", "type", "positioning", "strengths", "weaknesses", "pricing", "evidence", "analysis_status", "analysis_source", "evidence_count", "evidence_excerpt", "confidence"])
             writer.writeheader()
             writer.writerows(competitors)
         md_path = exports_dir / "competitor_matrix.md"
@@ -467,6 +870,9 @@ class Pipeline:
                 f"- Forças: {competitor['strengths']}",
                 f"- Fraquezas: {competitor['weaknesses']}",
                 f"- Pricing: {competitor['pricing']}",
+                f"- Status da análise: {competitor.get('analysis_status', 'unknown')}",
+                f"- Fonte da análise: {competitor.get('analysis_source', 'unknown')}",
+                f"- Evidências agregadas: {competitor.get('evidence_count', '0')}",
                 f"- Evidência: {competitor['evidence']}",
                 "",
             ])

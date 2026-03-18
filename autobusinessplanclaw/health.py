@@ -105,15 +105,23 @@ def _check_openai_compatible(config: ABCConfig) -> CheckResult:
     return CheckResult(name="openai_compatible", status="pass", detail="API direta acessível")
 
 
-def _check_web_search() -> CheckResult:
-    if not os.getenv("XAI_API_KEY", ""):
-        return CheckResult(
-            name="web_search",
-            status="warn",
-            detail="XAI_API_KEY não definido; pesquisa web ficará limitada/desativada.",
-            fix="Defina XAI_API_KEY para habilitar enriquecimento web",
-        )
-    return CheckResult(name="web_search", status="pass", detail="XAI_API_KEY presente")
+def _check_web_search(config: ABCConfig) -> CheckResult:
+    client = OpenAICompatibleClient(config.llm)
+    openclaw_token = client._openclaw_token()
+    openai_key = os.getenv(config.llm.api_key_env, "")
+    xai_key = os.getenv("XAI_API_KEY", "")
+    if openclaw_token:
+        return CheckResult(name="web_search", status="pass", detail="Web search pode usar OpenClaw gateway como caminho principal")
+    if openai_key:
+        return CheckResult(name="web_search", status="pass", detail=f"Web search pode usar fallback via {config.llm.api_key_env}")
+    if xai_key:
+        return CheckResult(name="web_search", status="pass", detail="Web search pode usar xAI como caminho opcional")
+    return CheckResult(
+        name="web_search",
+        status="warn",
+        detail="Nenhum backend de pesquisa web disponível (nem OpenClaw gateway, nem OpenAI, nem xAI).",
+        fix="Configure o gateway do OpenClaw com token, ou defina a chave OpenAI; xAI é apenas opcional.",
+    )
 
 
 def run_doctor(config: ABCConfig) -> DoctorReport:
@@ -125,7 +133,7 @@ def run_doctor(config: ABCConfig) -> DoctorReport:
         checks.append(_check_openai_compatible(config))
     if provider == "none":
         checks.append(CheckResult(name="llm_provider", status="pass", detail="provider=none (modo controlado/local)"))
-    checks.append(_check_web_search())
+    checks.append(_check_web_search(config))
     statuses = {c.status for c in checks}
     overall = "fail" if "fail" in statuses else "warn" if "warn" in statuses else "pass"
     return DoctorReport(checks=checks, overall=overall)

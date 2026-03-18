@@ -7,7 +7,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+"></a>
-  <a href="#testing"><img src="https://img.shields.io/badge/Tests-10%20passed-brightgreen?logo=pytest&logoColor=white" alt="10 Tests Passed"></a>
+  <a href="#testing"><img src="https://img.shields.io/badge/Tests-19%20passed-brightgreen?logo=pytest&logoColor=white" alt="19 Tests Passed"></a>
   <a href="https://github.com/ualvesdias/AutoBusinessPlanClaw"><img src="https://img.shields.io/badge/GitHub-AutoBusinessPlanClaw-181717?logo=github" alt="GitHub"></a>
   <a href="#openclaw-integration"><img src="https://img.shields.io/badge/OpenClaw-Compatible-ff4444" alt="OpenClaw Compatible"></a>
 </p>
@@ -41,12 +41,13 @@ Drop a startup idea plus a short founder questionnaire — get back a complete b
 <tr><td>🧠</td><td><code>persona_critiques.json</code></td><td>Investor / client / sales / expert critiques</td></tr>
 <tr><td>⚔️</td><td><code>tenth_man_report.json</code></td><td>9-pro / 1-dissent debate and master critique</td></tr>
 <tr><td>💸</td><td><code>exports/financial_model.csv</code></td><td>Financial model for spreadsheet use</td></tr>
+<tr><td>📈</td><td><code>exports/financial_analysis.md</code></td><td>Financial intelligence paragraph and recommendations</td></tr>
 <tr><td>📣</td><td><code>exports/gtm_experiments.md</code></td><td>GTM test plan and experiment ideas</td></tr>
 <tr><td>🖥️</td><td><code>exports/report.html</code></td><td>Structured HTML report with collapsible sections</td></tr>
 <tr><td>🪨</td><td><code>exports/obsidian-vault/</code></td><td>Obsidian-ready export with notes, MOC and canvas</td></tr>
 </table>
 
-The pipeline is designed to be **inspectable, resumable, and OpenClaw-friendly**. Each stage writes artifacts. Each run can be resumed. Each export can be reviewed without digging into prompts.
+The pipeline is designed to be **inspectable, resumable, and OpenClaw-friendly**. Each stage writes artifacts. Each run can be resumed. Each export can be reviewed without digging into prompts. The competition stage now includes a dedicated per-competitor analyst pass plus a quality gate, so weak evidence is surfaced as incomplete instead of being disguised as confident analysis.
 
 ---
 
@@ -67,11 +68,12 @@ cp examples/questionnaire.example.json questionnaire.json
 
 # 3. Run
 export OPENAI_API_KEY="sk-..."
-export XAI_API_KEY="xai-..."  # optional, for richer web research
+export OPENCLAW_GATEWAY_TOKEN="..."  # preferred when running through OpenClaw gateway
+export XAI_API_KEY="xai-..."  # optional, tertiary web-search fallback
 businessclaw run --config config.businessclaw.yaml --answers questionnaire.json
 ```
 
-Output → `artifacts/abc-YYYYMMDD-HHMMSS/` — plan, research, critiques, financials, HTML, and optional Obsidian vault.
+Output → `runs/abc-YYYYMMDD-HHMMSS/` — plan, research, critiques, financials, HTML, and optional Obsidian vault.
 
 <details>
 <summary>📝 Minimum required config</summary>
@@ -96,7 +98,7 @@ runtime:
   critique_rounds: 1
 
 output:
-  root: "artifacts"
+  root: "runs"
 ```
 
 </details>
@@ -107,7 +109,7 @@ output:
 
 | Capability | How It Works |
 |-----------|-------------|
-| **🧩 Staged Pipeline** | 12 explicit stages, each with artifacts, checkpoints, and resumability |
+| **🧩 Staged Pipeline** | 12 explicit stages, each with artifacts, checkpoints, resumability, and stage-level quality metadata |
 | **🤖 Multi-Agent Critique** | Investor, potential client, salesman, and expert personas challenge the plan from different angles |
 | **⚔️ 10th-Man Protocol** | 9 pro agents argue the case for success, 1 dissenting agent argues the strongest credible failure case |
 | **🌐 Web-Aware Research** | OpenClaw/xAI/OpenAI-compatible research path with deterministic fallback when web is unavailable |
@@ -177,14 +179,14 @@ See:
 |-------|-------------|
 | **intake** | Loads the founder idea and validated questionnaire |
 | **market_research** | Builds queries, runs web-backed discovery when available, stores raw evidence |
-| **competition** | Extracts and structures competitors, generates comparison exports |
+| **competition** | Extracts competitors, runs evidence-backed analysis per competitor, applies a quality gate, and generates comparison exports |
 | **synthesis** | Summarizes findings into market, pain, GTM, pricing, and competition insights |
 | **persona_critique** | Runs 4 critique personas against the current opportunity |
 | **tenth_man** | Generates 9 pro-success memos, 1 dissent memo, and a master critique |
 | **plan_draft** | Produces the first full plan draft |
 | **critique** | Audits the current plan for weak logic and missing evidence |
 | **revision** | Revises the plan based on critique rounds |
-| **financials** | Generates a compact financial model export |
+| **financials** | Runs a dedicated financial-modeling agent, normalizes a 12-month model, and falls back by business archetype when needed |
 | **gtm_pack** | Builds GTM experiment suggestions and next actions |
 | **export** | Writes summary metadata and final output package |
 
@@ -197,7 +199,7 @@ See:
 | Feature | Description |
 |---------|------------|
 | **🧾 Required Founder Questionnaire** | Uses 10 mandatory inputs so the plan is grounded in explicit founder assumptions |
-| **📊 Competition Mapping** | Produces both a competitor matrix and a comparison/reference table |
+| **📊 Competition Mapping** | Produces a competitor matrix, competitor reference table, per-competitor analyst output, and a quality gate that flags incomplete competitive intelligence |
 | **🧠 Debate-Driven Risk Analysis** | The risk section is informed by personas + 10th-man dissent, not generic startup filler |
 | **♻️ Resume Support** | Re-run safely with checkpoints and fresh-run directory cleanup |
 | **🖥️ HTML + Markdown + CSV Exports** | Outputs are easy to inspect, share, and import into other tools |
@@ -239,7 +241,7 @@ llm:
   openclaw_model: "openclaw:main"
 
 output:
-  root: "artifacts"
+  root: "runs"
 ```
 
 </details>
@@ -278,3 +280,7 @@ MIT — see `LICENSE` for details.
 <p align="center">
   <sub>Built for founder workflows with 🦞</sub>
 </p>
+
+
+## Financial model agent
+The financial stage now uses a dedicated financial-model agent. It first infers the business archetype (`saas`, `services`, `marketplace`, `consumer_brand`, `food_beverage`, or `other`), then asks the agent for a structured 12-month model. If the agent is unavailable or returns invalid JSON, the pipeline falls back to an archetype-specific model instead of a generic SaaS-shaped spreadsheet.

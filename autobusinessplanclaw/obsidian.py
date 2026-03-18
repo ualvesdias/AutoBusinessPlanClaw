@@ -202,6 +202,7 @@ def export_run_to_obsidian(run_dir: str | Path, vault_dir: str | Path) -> Path:
     competitor_md = (run_path / "exports" / "competitor_matrix.md").read_text(encoding="utf-8") if (run_path / "exports" / "competitor_matrix.md").exists() else ""
     competitor_ref_md = (run_path / "exports" / "competitor_reference_table.md").read_text(encoding="utf-8") if (run_path / "exports" / "competitor_reference_table.md").exists() else ""
     finance_csv = (run_path / "exports" / "financial_model.csv").read_text(encoding="utf-8") if (run_path / "exports" / "financial_model.csv").exists() else ""
+    financials = read_json(run_path / "stages" / "financials.json", {})
 
     idea = str(summary.get("idea") or run_path.name)
     idea_slug = slugify(idea)

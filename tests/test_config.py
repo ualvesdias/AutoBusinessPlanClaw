@@ -31,6 +31,7 @@ llm:
     assert cfg.llm.provider == "openclaw-http"
     assert cfg.llm.timeout_seconds == 20
     assert cfg.llm.max_completion_tokens == 12000
+    assert cfg.output.root == "runs"
 
 
 def test_load_questionnaire(tmp_path):

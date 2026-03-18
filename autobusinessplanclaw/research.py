@@ -7,6 +7,10 @@ from pathlib import Path
 
 from .models import EvidenceItem
 
+GENERIC_POSITIONING_FALLBACK = "Solução de software com aderência parcial ao problema central descrito pelo founder."
+GENERIC_STRENGTHS_FALLBACK = "Presença web encontrada em pesquisa externa; análise ainda superficial."
+GENERIC_WEAKNESSES_FALLBACK = "Evidência insuficiente para afirmar pricing, profundidade funcional e diferencial competitivo com alta confiança."
+
 
 PRICE_PATTERNS = [
     r"R\$\s?\d+[\.,]?\d*",
@@ -59,9 +63,17 @@ def _looks_like_product_url(url: str) -> bool:
     blocked_domains = {
         "reddit.com", "www.reddit.com", "instagram.com", "www.instagram.com", "researchgate.net", "www.researchgate.net",
         "youtube.com", "www.youtube.com", "youtu.be", "facebook.com", "www.facebook.com", "linkedin.com", "www.linkedin.com",
+        "pitchbook.com", "owler.com", "macrotrends.net", "clodura.ai", "leadiq.com", "plusvibe.ai",
     }
-    blocked_path_tokens = ("/blog/", "/artigos/", "/article/", "/articles/", "/reel/", "/comments/")
+    blocked_domain_fragments = (
+        "capterra", "g2.com", "g2crowd", "distrito.me", "serasaexperian.com.br", "fastcompanybrasil",
+        "jpefconsultoria", "ensun.io", "randoncorp.com", "atlasgov.com", "grcsolutions.com.br", "anbima.com.br",
+        "metrobh.com.br", "mercadopago.com.br", "gov.br", "blog.",
+    )
+    blocked_path_tokens = ("/blog/", "/artigos/", "/article/", "/articles/", "/reel/", "/comments/", ".pdf")
     if domain in blocked_domains:
+        return False
+    if any(fragment in domain for fragment in blocked_domain_fragments):
         return False
     if any(token in lowered for token in blocked_path_tokens):
         return False
@@ -197,22 +209,51 @@ def build_market_queries(idea: str, answers: dict[str, str], region: str | None 
     return dedupe_queries(queries)
 
 
+def _infer_competitor_search_terms(idea: str, answers: dict[str, str]) -> list[str]:
+    text = f"{idea} {answers['problem']} {answers['current_solution']} {answers['mvp']} {answers['icp']}".lower()
+    if any(tok in text for tok in ["fornecedor", "fornecedores", "supplier", "third party", "tp rm", "tprm", "due diligence", "grc"]):
+        return [
+            "third party risk management software",
+            "vendor risk management platform",
+            "supplier onboarding software",
+            "supplier due diligence platform",
+            "third party due diligence software",
+            "vendor compliance platform",
+        ]
+    if any(tok in text for tok in ["whatsapp", "agendamento", "agenda", "appointment", "scheduling"]):
+        return [
+            "whatsapp scheduling software",
+            "appointment scheduling software",
+            "agenda online para profissionais",
+            "automação de atendimento whatsapp",
+            "booking software",
+            "secretária virtual",
+        ]
+    return [
+        _compact_phrase(idea, 80),
+        _compact_phrase(answers["current_solution"], 80),
+        _compact_phrase(answers["mvp"], 80),
+        "competitors",
+        "alternatives",
+        "software",
+    ]
+
+
 def build_competitor_queries(idea: str, answers: dict[str, str], region: str | None = None) -> list[str]:
-    problem = _compact_phrase(answers["problem"])
-    icp = _compact_phrase(answers["icp"])
-    current = _compact_phrase(answers["current_solution"])
-    mvp = _compact_phrase(answers["mvp"])
-    idea_short = _compact_phrase(idea)
+    problem = _compact_phrase(answers["problem"], 90)
+    icp = _compact_phrase(answers["icp"], 90)
+    current = _compact_phrase(answers["current_solution"], 90)
+    idea_short = _compact_phrase(idea, 90)
     region_hint = _region_hint(region)
     suffix = f" {region_hint}" if region_hint else ""
+    terms = _infer_competitor_search_terms(idea, answers)
     queries = [
-        f'{problem} software competitors{suffix}',
-        f'{icp} alternatives to {idea_short}{suffix}',
-        f'{current} vendor comparison{suffix}',
-        f'{mvp} competitors pricing{suffix}',
-        f'{icp} scheduling automation tools{suffix}',
-        f'{icp} whatsapp automation tools{suffix}',
+        f'{idea_short} competitors{suffix}',
+        f'{problem} alternatives {suffix}'.strip(),
+        f'{current} software alternatives{suffix}',
+        f'{icp} vendor risk tools{suffix}',
     ]
+    queries.extend(f'{term}{suffix}' for term in terms[:4])
     return dedupe_queries(queries)
 
 
@@ -262,47 +303,200 @@ def build_evidence_summary(items: list[EvidenceItem], limit: int = 20) -> dict[s
     }
 
 
-def extract_competitors_from_evidence(items: list[EvidenceItem]) -> list[dict[str, str]]:
-    candidates: dict[str, dict[str, str]] = {}
+def _is_product_competitor(item: EvidenceItem) -> bool:
+    domain = _extract_domain(item.url)
+    lowered = f"{domain} {item.snippet}".lower()
+    reject_tokens = [
+        "deloitte", "econodata", "consultoria", "market size", "directory", "research report",
+        "ranking", "largest companies", "seguradoras", "employees", "consulting-risk", "slashdot", "sourceforge",
+    ]
+    if any(tok in lowered for tok in reject_tokens):
+        return False
+    positive_tokens = [
+        "supplier", "fornecedor", "third party", "due diligence", "homolog", "onboarding",
+        "tp rm", "tprm", "vendor risk", "gestão de terceiros", "gestão de fornecedores", "compliance",
+    ]
+    return any(tok in lowered for tok in positive_tokens)
+
+
+def _strip_markdown_noise(text: str) -> str:
+    cleaned = re.sub(r"[*_#`\[\]]", " ", text or "")
+    cleaned = re.sub(r"https?://\S+", " ", cleaned)
+    return _clean_text(cleaned)
+
+
+def _split_sentences(text: str) -> list[str]:
+    cleaned = _strip_markdown_noise(text)
+    return [part.strip(" -") for part in re.split(r"(?<=[\.!?])\s+", cleaned) if part.strip(" -")]
+
+
+def _collect_candidate_evidence(items: list[EvidenceItem]) -> dict[str, dict[str, object]]:
+    candidates: dict[str, dict[str, object]] = {}
     for item in items:
-        if item.url.startswith("xai://"):
-            continue
-        if item.url.startswith("founder://"):
+        if item.url.startswith("xai://") or item.url.startswith("founder://"):
             continue
         if not _looks_like_product_url(item.url):
             continue
-
+        if not _is_product_competitor(item):
+            continue
         domain = _extract_domain(item.url)
         if not domain:
             continue
         brand = _domain_to_brand(domain)
         lowered_brand = brand.lower()
-        if lowered_brand in {"web source 1", "web source 2", "web source 3", "web source 4", "web source 5", "search trace 1", "search trace 2", "search trace 3"}:
+        if lowered_brand in {"web source 1", "web source 2", "web source 3", "web source 4", "web source 5", "search trace 1", "search trace 2", "search trace 3", "br"}:
             continue
-        prices = _extract_prices(item.snippet)
-        candidate = {
+        if len(brand) <= 2:
+            continue
+        bucket = candidates.setdefault(lowered_brand, {
             "name": brand,
+            "domain": domain,
             "type": _infer_competitor_type(item.snippet, domain),
-            "positioning": item.snippet[:300],
-            "strengths": "Presença web encontrada em pesquisa externa; solução ativa no mercado.",
-            "weaknesses": "Necessita validação manual mais precisa de aderência ao ICP e pricing final.",
-            "pricing": ", ".join(prices) if prices else "Desconhecido",
+            "pricing": "Desconhecido",
             "evidence": item.url,
-        }
-        existing = candidates.get(lowered_brand)
-        if existing is None:
-            candidates[lowered_brand] = candidate
-        else:
-            if existing.get("pricing") == "Desconhecido" and candidate["pricing"] != "Desconhecido":
-                existing["pricing"] = candidate["pricing"]
-            if len(candidate["positioning"]) > len(existing.get("positioning", "")):
-                existing["positioning"] = candidate["positioning"]
-            if existing.get("evidence", "").startswith("xai://") and item.url.startswith("http"):
-                existing["evidence"] = item.url
+            "evidence_items": [],
+        })
+        bucket["evidence_items"].append(item)
+        pricing = ", ".join(_extract_prices(item.snippet)) or "Desconhecido"
+        if bucket["pricing"] == "Desconhecido" and pricing != "Desconhecido":
+            bucket["pricing"] = pricing
+        if bucket["type"] != "direct" and _infer_competitor_type(item.snippet, domain) == "direct":
+            bucket["type"] = "direct"
+    return candidates
 
-    competitors = list(candidates.values())
-    competitors.sort(key=lambda c: (c.get("type") != "direct", c.get("name", "")))
-    return competitors[:12]
+
+def prepare_competitor_candidates(items: list[EvidenceItem]) -> list[dict[str, object]]:
+    candidates = _collect_candidate_evidence(items)
+    prepared: list[dict[str, object]] = []
+    for bucket in candidates.values():
+        evidence_items = list(bucket.get("evidence_items", []))
+        prepared.append({
+            "name": str(bucket.get("name", "Unknown")),
+            "domain": str(bucket.get("domain", "")),
+            "type": str(bucket.get("type", "indirect")),
+            "pricing": str(bucket.get("pricing", "Desconhecido")),
+            "evidence": str(bucket.get("evidence", "")),
+            "evidence_count": len(evidence_items),
+            "evidence_excerpt": _compact_phrase(" ".join(item.snippet for item in evidence_items if item.snippet), limit=180) if evidence_items else "",
+            "evidence_snippets": [item.snippet for item in evidence_items if item.snippet][:8],
+            "evidence_urls": [item.url for item in evidence_items if item.url][:8],
+        })
+    prepared.sort(key=lambda c: (c.get("type") != "direct", c.get("name", "")))
+    return prepared[:10]
+
+
+def build_competitor_quality(competitors: list[dict[str, object]], raw_candidate_count: int | None = None) -> dict[str, object]:
+    quality = {
+        "raw_candidate_count": raw_candidate_count if raw_candidate_count is not None else len(competitors),
+        "competitor_count": len(competitors),
+        "fallback_count": sum(1 for c in competitors if c.get("analysis_status") == "fallback"),
+        "analyzed_count": sum(1 for c in competitors if c.get("analysis_status") == "analyzed"),
+        "agent_count": sum(1 for c in competitors if c.get("analysis_source") == "competitor_analyst_agent"),
+    }
+    quality["fallback_ratio"] = round((quality["fallback_count"] / quality["competitor_count"]), 3) if quality["competitor_count"] else 1.0
+    quality["quality_gate_passed"] = quality["competitor_count"] > 0 and quality["fallback_ratio"] <= 0.5
+    return quality
+
+
+def _derive_positioning(name: str, snippets: list[str], domain: str) -> str:
+    keyword_map = [
+        (("supplier", "fornecedor", "fornecedores"), "Plataforma focada em gestão e relacionamento de fornecedores"),
+        (("third party", "terceiros", "third-party"), "Solução voltada à gestão e avaliação de terceiros"),
+        (("due diligence",), "Plataforma de due diligence e validação de risco"),
+        (("onboarding", "homolog"), "Ferramenta de onboarding, homologação e coleta documental"),
+        (("compliance",), "Solução com foco em compliance operacional e controles"),
+        (("background check",), "Serviço de background check e validação cadastral"),
+        (("procurement", "srm"), "Plataforma de procurement/SRM com processos de cadastro e governança"),
+    ]
+    joined = " ".join(snippets).lower()
+    for sentence in _split_sentences(" ".join(snippets)):
+        lowered = sentence.lower()
+        if name.lower() in lowered and any(tok in lowered for tokens, _ in keyword_map for tok in tokens):
+            return sentence[:220]
+    for tokens, description in keyword_map:
+        if any(tok in joined for tok in tokens):
+            return description + "."
+    if any(k in domain for k in ["sap", "ariba", "coupa", "softexpert"]):
+        return "Suite enterprise com supplier management, compliance e workflows de procurement."
+    return GENERIC_POSITIONING_FALLBACK
+
+
+def _derive_strengths(snippets: list[str], domain: str) -> tuple[str, str]:
+    joined = " ".join(snippets).lower()
+    reasons = []
+    if any(tok in joined for tok in ["compliance", "due diligence", "background check", "monitoramento"]):
+        reasons.append("cobre componentes claros de risco/compliance")
+    if any(tok in joined for tok in ["onboarding", "homolog", "document", "cadastro"]):
+        reasons.append("endereça onboarding documental e fluxo operacional")
+    if any(tok in joined for tok in ["portal", "platform", "plataforma", "software", "saas"]):
+        reasons.append("tem proposta de produto B2B relativamente clara")
+    if any(k in domain for k in ["sap", "ariba", "coupa", "softexpert"]):
+        reasons.append("marca e cobertura enterprise")
+    if reasons:
+        text = "Pelos sinais públicos coletados, parece forte porque " + "; ".join(reasons[:3]) + "."
+        status = "analyzed"
+    else:
+        text = GENERIC_STRENGTHS_FALLBACK
+        status = "fallback"
+    return text, status
+
+
+def _derive_weaknesses(snippets: list[str], domain: str, type_: str) -> tuple[str, str]:
+    joined = " ".join(snippets).lower()
+    concerns = []
+    if any(k in domain for k in ["sap", "ariba", "coupa", "softexpert"]):
+        concerns.append("pode ser excessivamente enterprise para times mid-market enxutos")
+    if not any(tok in joined for tok in ["pricing", "preço", "r$", "usd", "/mês", "per month"]):
+        concerns.append("pricing não ficou claro nas evidências públicas coletadas")
+    if not any(tok in joined for tok in ["security", "segurança", "risk", "risco", "tprm", "due diligence"]):
+        concerns.append("profundidade específica de risco/segurança ainda não ficou comprovada")
+    if type_ != "direct":
+        concerns.append("a aderência ao caso principal parece parcial, não total")
+    if concerns:
+        text = "Possíveis fragilidades: " + "; ".join(concerns[:3]) + "."
+        status = "analyzed"
+    else:
+        text = GENERIC_WEAKNESSES_FALLBACK
+        status = "fallback"
+    return text, status
+
+
+def analyze_competitors_from_evidence(items: list[EvidenceItem]) -> tuple[list[dict[str, str]], dict[str, object]]:
+    candidates = _collect_candidate_evidence(items)
+    competitors: list[dict[str, str]] = []
+    fallback_count = 0
+    for lowered_brand, bucket in candidates.items():
+        evidence_items = bucket.get("evidence_items", [])
+        snippets = [item.snippet for item in evidence_items if item.snippet]
+        domain = str(bucket.get("domain", ""))
+        positioning = _derive_positioning(str(bucket.get("name", "")), snippets, domain)
+        strengths, strengths_status = _derive_strengths(snippets, domain)
+        weaknesses, weaknesses_status = _derive_weaknesses(snippets, domain, str(bucket.get("type", "indirect")))
+        used_fallback = positioning == GENERIC_POSITIONING_FALLBACK or strengths_status == "fallback" or weaknesses_status == "fallback"
+        if used_fallback:
+            fallback_count += 1
+        competitors.append({
+            "name": str(bucket.get("name", "Unknown")),
+            "type": str(bucket.get("type", "indirect")),
+            "positioning": positioning,
+            "strengths": strengths,
+            "weaknesses": weaknesses,
+            "pricing": str(bucket.get("pricing", "Desconhecido")),
+            "evidence": str(bucket.get("evidence", "")),
+            "analysis_status": "fallback" if used_fallback else "analyzed",
+            "analysis_source": "evidence_synthesis",
+            "evidence_count": str(len(evidence_items)),
+            "evidence_excerpt": _compact_phrase(" ".join(snippets), limit=180) if snippets else "",
+        })
+    competitors.sort(key=lambda c: (c.get("type") != "direct", c.get("analysis_status") == "fallback", c.get("name", "")))
+    competitors = competitors[:10]
+    quality = build_competitor_quality(competitors, raw_candidate_count=len(candidates))
+    return competitors, quality
+
+
+def extract_competitors_from_evidence(items: list[EvidenceItem]) -> list[dict[str, str]]:
+    competitors, _quality = analyze_competitors_from_evidence(items)
+    return competitors
 
 
 def _summarize_positioning(text: str) -> str:
@@ -327,34 +521,42 @@ def _summarize_positioning(text: str) -> str:
 
 def _infer_icp_fit(name: str, evidence: str, default_icp: str) -> str:
     lowered = f"{name} {evidence}".lower()
-    matches = []
-    if any(tok in lowered for tok in ["psic", "mental"]):
-        matches.append("psicólogos")
-    if any(tok in lowered for tok in ["nutri", "diet"]):
-        matches.append("nutricionistas")
-    if any(tok in lowered for tok in ["personal", "fitness", "gym", "treino"]):
-        matches.append("personal trainers")
-    if any(tok in lowered for tok in ["clinic", "consult", "health", "saude"]):
-        matches.append("clínicas/saúde")
-    if any(tok in lowered for tok in ["sal", "spa", "beauty", "barbear"]):
-        matches.append("beleza/bem-estar")
-    if matches:
-        uniq = []
-        for item in matches:
-            if item not in uniq:
-                uniq.append(item)
-        return f"Mais forte em {', '.join(uniq[:3])}."[:120]
+    if any(tok in lowered for tok in ["thirdsafe", "linkana", "vaas", "fornecedor", "supplier", "third party", "vendor"]):
+        return "Alta aderência a times de GRC/compliance/segurança com processo de terceiros."[:120]
+    if any(tok in lowered for tok in ["sap", "ariba", "coupa", "softexpert"]):
+        return "Aderência funcional relevante, mas mais típica de operação enterprise."[:120]
     return f"Parcialmente alinhado ao ICP-alvo: {default_icp[:70]}"[:120]
 
 
+def _infer_solution_frame(idea_name: str, answers: dict[str, str]) -> tuple[str, str, str]:
+    text = f"{idea_name} {answers['problem']} {answers['mvp']} {answers['current_solution']}".lower()
+    if any(tok in text for tok in ["fornecedor", "fornecedores", "supplier", "third party", "tprm", "grc", "due diligence"]):
+        return (
+            "Portal SaaS de intake, due diligence e priorização de risco",
+            "Software / workflow / compliance platform inferred",
+            "Compete na gestão de terceiros, homologação, due diligence ou priorização de risco de fornecedores.",
+        )
+    if any(tok in text for tok in ["whatsapp", "agendamento", "agenda", "appointment", "scheduling"]):
+        return (
+            "WhatsApp-first + dashboard web",
+            "Web / scheduling / WhatsApp / inferred",
+            "Competes with or overlaps the idea on scheduling automation / workflow outsourcing.",
+        )
+    return (
+        "Digital product / workflow software",
+        "Software / service inferred",
+        "Competes with or overlaps the core workflow targeted by the idea.",
+    )
+
 
 def build_comparison_rows(competitors: list[dict[str, str]], idea_name: str, answers: dict[str, str]) -> list[dict[str, str]]:
+    our_channel, competitor_channel, comparison_frame = _infer_solution_frame(idea_name, answers)
     rows = [
         {
             "name": idea_name,
             "type": "our_idea",
             "icp_fit": _clean_text(answers["icp"])[:120],
-            "channel": "WhatsApp-first + dashboard web",
+            "channel": our_channel,
             "pricing": "TBD / validation stage",
             "positioning": _clean_text(answers["problem"])[:180],
             "strengths": _clean_text(answers["advantage"])[:180],
@@ -370,12 +572,12 @@ def build_comparison_rows(competitors: list[dict[str, str]], idea_name: str, ans
             "name": competitor.get("name", "Unknown"),
             "type": competitor.get("type", "unknown"),
             "icp_fit": _infer_icp_fit(competitor.get("name", ""), evidence, default_icp),
-            "channel": "Web / scheduling / WhatsApp / inferred",
+            "channel": competitor_channel,
             "pricing": competitor.get("pricing", "Desconhecido"),
             "positioning": _summarize_positioning(competitor.get("positioning", "")),
             "strengths": competitor.get("strengths", "")[:180],
             "weaknesses": competitor.get("weaknesses", "")[:180],
-            "comparison_to_idea": "Competes with or overlaps the idea on scheduling automation / workflow outsourcing.",
+            "comparison_to_idea": comparison_frame,
             "evidence": evidence,
         })
     return rows
@@ -434,7 +636,38 @@ def fallback_evidence(idea: str, answers: dict[str, str]) -> list[EvidenceItem]:
     ]
 
 
-def fallback_competitors(answers: dict[str, str]) -> list[dict[str, str]]:
+def fallback_competitors(answers: dict[str, str], idea: str = "") -> list[dict[str, str]]:
+    text = f"{idea} {answers['problem']} {answers['current_solution']} {answers['mvp']} {answers['icp']}".lower()
+    if any(tok in text for tok in ["fornecedor", "fornecedores", "supplier", "third party", "tprm", "grc", "due diligence"]):
+        return [
+            {
+                "name": "TPRM suite enterprise",
+                "type": "direct",
+                "positioning": "Plataforma mais robusta de third-party risk para empresas com programa maduro de compliance e procurement.",
+                "strengths": "Cobertura funcional ampla e marca enterprise reconhecida.",
+                "weaknesses": "Pode ser pesada, cara e lenta para mid-market com time pequeno.",
+                "pricing": "Enterprise",
+                "evidence": "heuristic://enterprise-tprm-suite",
+            },
+            {
+                "name": "Portal de homologação de fornecedores",
+                "type": "direct",
+                "positioning": "Solução focada em cadastro, documentos, homologação e workflow de fornecedores.",
+                "strengths": "Resolve onboarding e organização operacional com clareza.",
+                "weaknesses": "Nem sempre prioriza risco de forma contextual para segurança/GRC.",
+                "pricing": "SaaS B2B",
+                "evidence": "heuristic://supplier-onboarding-platform",
+            },
+            {
+                "name": "Consultoria e due diligence manual",
+                "type": "status_quo",
+                "positioning": "Processo humano com planilhas, formulários e análise artesanal de terceiros.",
+                "strengths": "Flexível e possível de começar sem software novo.",
+                "weaknesses": "Baixa escala, pouca rastreabilidade e priorização inconsistente.",
+                "pricing": "Projeto / horas",
+                "evidence": "heuristic://manual-third-party-risk-process",
+            },
+        ]
     niche = answers["icp"]
     return [
         {
@@ -444,7 +677,7 @@ def fallback_competitors(answers: dict[str, str]) -> list[dict[str, str]]:
             "strengths": "Baixo custo inicial, nenhuma adoção nova necessária",
             "weaknesses": "Baixa escala, priorização fraca, pouca automação",
             "pricing": "Baixo ou implícito",
-            "evidence": answers["current_solution"],
+            "evidence": "heuristic://status-quo",
         },
         {
             "name": "Consultoria especializada",
@@ -453,7 +686,7 @@ def fallback_competitors(answers: dict[str, str]) -> list[dict[str, str]]:
             "strengths": "Profundidade técnica, credibilidade",
             "weaknesses": "Escala ruim, custo alto, dependência de horas humanas",
             "pricing": "Projeto / retainer",
-            "evidence": answers["problem"],
+            "evidence": "heuristic://specialized-service",
         },
         {
             "name": "Ferramenta horizontal existente",
@@ -462,6 +695,6 @@ def fallback_competitors(answers: dict[str, str]) -> list[dict[str, str]]:
             "strengths": "Já conhecida pelo mercado, onboarding mais fácil",
             "weaknesses": "Pode gerar ruído ou não atacar o fluxo exato do ICP",
             "pricing": "SaaS",
-            "evidence": answers["why_now"],
+            "evidence": "heuristic://horizontal-tool",
         },
     ]

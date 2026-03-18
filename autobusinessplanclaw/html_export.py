@@ -224,6 +224,7 @@ def export_run_to_html(run_dir: str | Path, html_path: str | Path) -> Path:
     plan_md = _strip_internal_appendices(_read_text(run_path / 'business_plan.md'))
     gtm_md = _read_text(run_path / 'exports' / 'gtm_experiments.md')
     finance_csv = _read_text(run_path / 'exports' / 'financial_model.csv')
+    financials = _read_json(run_path / 'stages' / 'financials.json', {})
     queries = _read_json(run_path / 'research_queries.json', [])
     research_results = _read_json(run_path / 'research_results.json', [])
 
@@ -309,7 +310,11 @@ def export_run_to_html(run_dir: str | Path, html_path: str | Path) -> Path:
     )
 
     plan_body = _details('Rendered business plan', _render_markdown(plan_md), True)
-    finance_body = _details('Financial model table', _render_csv_table(finance_csv), True)
+    finance_analysis = (financials.get('analysis', {}) if isinstance(financials, dict) else {})
+    finance_intro = ''
+    if finance_analysis:
+        finance_intro = _details('Financial intelligence', _render_dict_list({'Intelligence': finance_analysis.get('intelligence_paragraph', ''), 'Recommendations': '; '.join(finance_analysis.get('recommendations', []))}), True)
+    finance_body = finance_intro + _details('Financial model table', _render_csv_table(finance_csv), True)
     gtm_body = _details('Rendered GTM pack', _render_markdown(gtm_md), True)
     meta_body = _details('Run metadata', _render_dict_list({
         'run_dir': summary.get('run_dir', run_path),

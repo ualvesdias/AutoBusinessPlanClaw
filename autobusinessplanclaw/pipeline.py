@@ -188,11 +188,6 @@ class Pipeline:
         (run_dir / "answers.json").write_text(json.dumps(answers, indent=2, ensure_ascii=False), encoding="utf-8")
         (run_dir / "business_plan.md").write_text(current_plan, encoding="utf-8")
 
-        if self.config.knowledge_base.enabled:
-            self._write_knowledge_base(run_dir, answers, evidence, competition or {}, synthesis or {}, persona_critiques or {}, tenth_man_report or {}, current_plan)
-        if self.config.self_learning.enabled:
-            self._write_self_learning(run_dir, answers, critiques, tenth_man_report or {}, competition or {}, evidence)
-
         summary = {
             "idea": self.config.business.idea,
             "run_dir": str(run_dir),
@@ -229,10 +224,6 @@ class Pipeline:
             "tenth_man_report.json",
             "doctor.json",
         ]
-        managed_dirs.extend([
-            self.config.knowledge_base.root_name,
-            self.config.self_learning.root_name,
-        ])
         for dirname in managed_dirs:
             path = run_dir / dirname
             if path.exists():
@@ -263,7 +254,7 @@ class Pipeline:
 
         competitors = extract_competitors_from_evidence(dedupe_evidence(evidence_items))
         if len(competitors) < 3:
-            fallback = fallback_competitors(answers, self.config.business.idea)
+            fallback = fallback_competitors(answers)
             existing = {c["name"].strip().lower() for c in competitors}
             for competitor in fallback:
                 key = competitor["name"].strip().lower()
@@ -814,69 +805,6 @@ CONDITIONAL GO
             "recorded_at": datetime.now(UTC).isoformat(),
         }
         (prompt_dir / f"{stage_name}.response.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-
-    def _write_knowledge_base(self, run_dir: Path, answers, evidence, competition, synthesis, persona_critiques, tenth_man_report, current_plan: str) -> None:
-        kb_dir = run_dir / self.config.knowledge_base.root_name
-        kb_dir.mkdir(exist_ok=True)
-        sections = {
-            "decisions": {
-                "verdict": "CONDITIONAL GO" if "CONDITIONAL GO" in current_plan else "UNSPECIFIED",
-                "key_risks": synthesis.get("killer_risks", ""),
-                "go_to_market": synthesis.get("acquisition", ""),
-            },
-            "findings": {
-                "problem": synthesis.get("problem", ""),
-                "icp": synthesis.get("icp", ""),
-                "differentiation": synthesis.get("differentiation", ""),
-                "competitors": (competition or {}).get("competitors", []),
-            },
-            "evidence": [e.__dict__ for e in evidence],
-            "personas": persona_critiques,
-            "debate": tenth_man_report,
-        }
-        for name, payload in sections.items():
-            path = kb_dir / f"{name}.json"
-            path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-        overview = f"""# Knowledge Base\n\n## Business\n- Idea: {self.config.business.idea}\n- Region: {self.config.business.region}\n\n## Core findings\n- Problem: {synthesis.get('problem', '')}\n- ICP: {synthesis.get('icp', '')}\n- Differentiation: {synthesis.get('differentiation', '')}\n- Competitors mapped: {len((competition or {}).get('competitors', []))}\n\n## Key decisions\n- GTM hypothesis: {synthesis.get('acquisition', '')}\n- Killer risks: {synthesis.get('killer_risks', '')}\n"""
-        (kb_dir / "README.md").write_text(overview, encoding="utf-8")
-
-    def _write_self_learning(self, run_dir: Path, answers, critiques, tenth_man_report, competition, evidence) -> None:
-        evo_dir = run_dir / self.config.self_learning.root_name
-        evo_dir.mkdir(exist_ok=True)
-        lessons = []
-        if not evidence or all(e.url.startswith("founder://") for e in evidence):
-            lessons.append({
-                "severity": "warning",
-                "topic": "external_research_coverage",
-                "lesson": "When no orchestrator-provided web research is available, mark competition as heuristic and avoid presenting archetypes as validated competitors.",
-                "expires_in_days": self.config.self_learning.decay_days,
-            })
-        if competition and any((c.get("evidence", "").startswith("heuristic://") for c in competition.get("competitors", []))):
-            lessons.append({
-                "severity": "warning",
-                "topic": "heuristic_competition",
-                "lesson": "Heuristic competitors should be niche-specific archetypes with explicit heuristic evidence labels, never founder answer text as evidence.",
-                "expires_in_days": self.config.self_learning.decay_days,
-            })
-        if critiques:
-            lessons.append({
-                "severity": "info",
-                "topic": "revision_loop",
-                "lesson": "Preserve critique and debate outputs separately from the business plan body to reduce duplication in exports.",
-                "expires_in_days": self.config.self_learning.decay_days,
-            })
-        lessons = lessons[: self.config.self_learning.max_lessons_per_run]
-        (evo_dir / "lessons.json").write_text(json.dumps(lessons, indent=2, ensure_ascii=False), encoding="utf-8")
-        md = ["# Self-learning lessons", ""]
-        for lesson in lessons:
-            md.extend([
-                f"## {lesson['topic']}",
-                f"- Severity: {lesson['severity']}",
-                f"- Lesson: {lesson['lesson']}",
-                f"- Decay: {lesson['expires_in_days']} days",
-                "",
-            ])
-        (evo_dir / "README.md").write_text("\n".join(md), encoding="utf-8")
 
     def _safe_read_json(self, path: Path, default):
         if not path.exists():

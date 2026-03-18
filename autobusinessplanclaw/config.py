@@ -5,7 +5,7 @@ from typing import Any
 
 import yaml
 
-from .models import ABCConfig, ProjectConfig, BusinessConfig, RuntimeConfig, LLMConfig, OutputConfig, KnowledgeBaseConfig, SelfLearningConfig, OpenClawBridgeConfig
+from .models import ABCConfig, ProjectConfig, BusinessConfig, RuntimeConfig, LLMConfig, OutputConfig
 from .questionnaire import required_question_map
 
 
@@ -29,9 +29,6 @@ def load_config(path: str | Path) -> ABCConfig:
     runtime = data.get("runtime") or {}
     llm = data.get("llm") or {}
     output = data.get("output") or {}
-    knowledge_base = data.get("knowledge_base") or {}
-    self_learning = data.get("self_learning") or {}
-    openclaw_bridge = data.get("openclaw_bridge") or {}
 
     if not project.get("name"):
         raise ConfigError("Missing required field: project.name")
@@ -70,25 +67,6 @@ def load_config(path: str | Path) -> ABCConfig:
             openclaw_model=str(llm.get("openclaw_model", "openclaw:main")),
         ),
         output=OutputConfig(root=str(output.get("root", "artifacts"))),
-        knowledge_base=KnowledgeBaseConfig(
-            enabled=bool(knowledge_base.get("enabled", True)),
-            root_name=str(knowledge_base.get("root_name", "knowledge_base")),
-            backend=str(knowledge_base.get("backend", "markdown")),
-        ),
-        self_learning=SelfLearningConfig(
-            enabled=bool(self_learning.get("enabled", True)),
-            root_name=str(self_learning.get("root_name", "evolution")),
-            decay_days=int(self_learning.get("decay_days", 30)),
-            max_lessons_per_run=int(self_learning.get("max_lessons_per_run", 8)),
-        ),
-        openclaw_bridge=OpenClawBridgeConfig(
-            enabled=bool(openclaw_bridge.get("enabled", False)),
-            gateway_url=str(openclaw_bridge.get("gateway_url", "http://127.0.0.1:18789")),
-            gateway_token_env=str(openclaw_bridge.get("gateway_token_env", "OPENCLAW_GATEWAY_TOKEN")),
-            use_gateway_web_search=bool(openclaw_bridge.get("use_gateway_web_search", True)),
-            use_web_search_injection=bool(openclaw_bridge.get("use_web_search_injection", False)),
-            web_search_results_path=str(openclaw_bridge.get("web_search_results_path", "")),
-        ),
     )
 
 

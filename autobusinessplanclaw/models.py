@@ -52,40 +52,12 @@ class OutputConfig:
 
 
 @dataclass(frozen=True)
-class KnowledgeBaseConfig:
-    enabled: bool = True
-    root_name: str = "knowledge_base"
-    backend: str = "markdown"
-
-
-@dataclass(frozen=True)
-class SelfLearningConfig:
-    enabled: bool = True
-    root_name: str = "evolution"
-    decay_days: int = 30
-    max_lessons_per_run: int = 8
-
-
-@dataclass(frozen=True)
-class OpenClawBridgeConfig:
-    enabled: bool = False
-    gateway_url: str = "http://127.0.0.1:18789"
-    gateway_token_env: str = "OPENCLAW_GATEWAY_TOKEN"
-    use_gateway_web_search: bool = True
-    use_web_search_injection: bool = False
-    web_search_results_path: str = ""
-
-
-@dataclass(frozen=True)
 class ABCConfig:
     project: ProjectConfig
     business: BusinessConfig
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
-    knowledge_base: KnowledgeBaseConfig = field(default_factory=KnowledgeBaseConfig)
-    self_learning: SelfLearningConfig = field(default_factory=SelfLearningConfig)
-    openclaw_bridge: OpenClawBridgeConfig = field(default_factory=OpenClawBridgeConfig)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

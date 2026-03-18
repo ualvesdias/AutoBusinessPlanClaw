@@ -12,38 +12,76 @@ from .config import ConfigError, load_config, load_questionnaire
 from .health import run_doctor, write_doctor_report
 from .html_export import export_run_to_html
 from .obsidian import export_run_to_obsidian
-from .openclaw_bridge import OpenClawBridgeError, load_gateway_token, web_search_via_gateway
 from .pipeline import Pipeline
 from .questionnaire import REQUIRED_QUESTIONS
+from .research import normalize_evidence
+
 console = Console()
 
 
-def _load_injected_web_search_payload(path: str | Path) -> dict[str, list[dict[str, Any]]]:
-    payload_path = Path(path).expanduser().resolve()
-    data = json.loads(payload_path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ConfigError("Injected web search payload must be a JSON object")
+def _call_xai_web_search(query: str, count: int) -> list[dict[str, Any]]:
+    try:
+        import os
+        import requests
+    except ImportError:
+        return []
 
-    batches = data.get("batches", data)
-    if not isinstance(batches, dict):
-        raise ConfigError("Injected web search payload must contain a 'batches' object or be a query->results mapping")
+    api_key = os.getenv("XAI_API_KEY", "")
+    if not api_key:
+        return []
+    response = requests.post(
+        "https://api.x.ai/v1/responses",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json={
+            "model": "grok-4.20-beta-latest-non-reasoning",
+            "input": [{"role": "user", "content": f"Search the web and return concrete findings for: {query}"}],
+            "tools": [{"type": "web_search"}],
+            "temperature": 0.1,
+        },
+        timeout=(10, 90),
+    )
+    if response.status_code >= 400:
+        return []
+    payload = response.json()
+    output = payload.get("output") or []
 
-    normalized: dict[str, list[dict[str, Any]]] = {}
-    for query, results in batches.items():
-        if not isinstance(results, list):
+    text_chunks: list[str] = []
+    page_urls: list[str] = []
+    search_queries: list[str] = []
+    for item in output:
+        if not isinstance(item, dict):
             continue
-        normalized[str(query).strip()] = [item for item in results if isinstance(item, dict)]
-    return normalized
+        if item.get("type") == "web_search_call":
+            action = item.get("action") or {}
+            if action.get("type") == "open_page" and action.get("url"):
+                page_urls.append(str(action.get("url")))
+            if action.get("type") == "search" and action.get("query"):
+                search_queries.append(str(action.get("query")))
+        for content in item.get("content") or []:
+            if isinstance(content, dict) and content.get("type") == "output_text" and content.get("text"):
+                text_chunks.append(str(content.get("text")))
 
-
-
-def _make_injected_web_search_fn(payload: dict[str, list[dict[str, Any]]]):
-    def _search(query: str, count: int):
-        results = payload.get(query.strip(), [])
-        return results[:count] if count > 0 else results
-
-    return _search
-
+    summary = "\n\n".join(text_chunks).strip()
+    evidence: list[dict[str, Any]] = []
+    if summary:
+        evidence.append({
+            "title": f"xAI web synthesis: {query[:120]}",
+            "url": "xai://responses/web_search",
+            "snippet": summary[:4000],
+        })
+    for idx, url in enumerate(page_urls[: max(3, min(count, 8))], start=1):
+        evidence.append({
+            "title": f"Web source {idx} for: {query[:80]}",
+            "url": url,
+            "snippet": summary[:600] if summary else f"Derived from xAI web search for query: {query}",
+        })
+    for idx, sq in enumerate(search_queries[:3], start=1):
+        evidence.append({
+            "title": f"Search trace {idx}",
+            "url": f"xai://search/{idx}",
+            "snippet": sq,
+        })
+    return evidence
 
 
 def cmd_init_questionnaire(args: argparse.Namespace) -> int:
@@ -75,31 +113,13 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     pipeline = Pipeline(config)
 
-    injected_path = args.web_search_results or config.openclaw_bridge.web_search_results_path
-    web_search_fn = None
-    if config.runtime.allow_web_research and (args.use_gateway_web_search or (config.openclaw_bridge.enabled and config.openclaw_bridge.use_gateway_web_search)):
-        try:
-            gateway_token = load_gateway_token(config.openclaw_bridge.gateway_token_env)
-            if not gateway_token:
-                console.print("[yellow]OpenClaw bridge enabled, but no gateway token was found. Falling back.[/yellow]")
-            else:
-                bridge_url = config.openclaw_bridge.gateway_url
-                web_search_fn = lambda query, count: web_search_via_gateway(query=query, count=count, base_url=bridge_url, token=gateway_token)
-                console.print(f"[green]Using OpenClaw Gateway web search bridge:[/green] {bridge_url}")
-        except OpenClawBridgeError as exc:
-            console.print(f"[yellow]OpenClaw bridge unavailable:[/yellow] {exc}")
-
-    if web_search_fn is None and config.runtime.allow_web_research and (args.use_injected_web_search or config.openclaw_bridge.use_web_search_injection):
-        if not injected_path:
-            console.print("[yellow]Injected web search enabled, but no payload path was provided. Falling back to local evidence only.[/yellow]")
-        else:
-            payload = _load_injected_web_search_payload(injected_path)
-            web_search_fn = _make_injected_web_search_fn(payload)
-            console.print(f"[green]Using injected web search payload:[/green] {injected_path}")
+    def web_search_wrapper(query: str, count: int):
+        raw = _call_xai_web_search(query, count)
+        return [vars(item) for item in normalize_evidence(raw)]
 
     run_dir = pipeline.run(
         answers=answers,
-        web_search_fn=web_search_fn,
+        web_search_fn=web_search_wrapper,
         output_dir=args.output,
         resume=args.resume,
     )
@@ -173,9 +193,6 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--html-output", help="Caminho do HTML self-contained (padrão: exports/report.html dentro do run)")
     run_p.add_argument("--export-obsidian", action="store_true", help="Exportar automaticamente para um vault do Obsidian ao final do run")
     run_p.add_argument("--obsidian-vault-dir", help="Diretório do vault do Obsidian para export automático")
-    run_p.add_argument("--use-gateway-web-search", action="store_true", help="Usar o Gateway local do OpenClaw para executar web_search durante o run")
-    run_p.add_argument("--use-injected-web-search", action="store_true", help="Consumir resultados de busca web injetados pelo orquestrador/OpenClaw")
-    run_p.add_argument("--web-search-results", help="JSON com batches de web search no formato query -> [results]")
 
     obs_p = sub.add_parser("export-obsidian", help="Exportar um run para um novo vault do Obsidian")
     obs_p.add_argument("--run-dir", required=True)

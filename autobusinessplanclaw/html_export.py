@@ -214,8 +214,6 @@ def export_run_to_html(run_dir: str | Path, html_path: str | Path) -> Path:
     summary = _read_json(run_path / 'run_summary.json', {})
     answers = _read_json(run_path / 'answers.json', {})
     synthesis = _read_json(run_path / 'synthesis.json', {})
-    kb_readme = _read_text(run_path / 'knowledge_base' / 'README.md')
-    lessons_md = _read_text(run_path / 'evolution' / 'README.md')
     competition = _read_json(run_path / 'competitor_matrix.json', {})
     competitor_reference = _read_json(run_path / 'competitor_reference_table.json', [])
     persona = _read_json(run_path / 'persona_critiques.json', {})
@@ -235,7 +233,7 @@ def export_run_to_html(run_dir: str | Path, html_path: str | Path) -> Path:
     nav_items = [
         ('overview', 'Overview'), ('answers', 'Founder answers'), ('research', 'Research'),
         ('competition', 'Competition'), ('debate', 'Debate'), ('plan', 'Business plan'),
-        ('finance', 'Financial model'), ('gtm', 'GTM'), ('kb', 'Knowledge base'), ('learning', 'Self-learning'), ('meta', 'Metadata')
+        ('finance', 'Financial model'), ('gtm', 'GTM'), ('meta', 'Metadata')
     ]
     nav = '<nav class="sidebar"><div class="brand">AutoBusinessPlanClaw</div>' + ''.join(
         f'<a href="#{slug}">{label}</a>' for slug, label in nav_items
@@ -287,7 +285,6 @@ def export_run_to_html(run_dir: str | Path, html_path: str | Path) -> Path:
         })
     competition_body = (
         _details('Competition matrix', _render_table_from_rows(competitor_rows, ['name', 'type', 'pricing', 'positioning', 'strengths', 'weaknesses', 'evidence']), True)
-        + '<p class="muted">If evidence uses <code>heuristic://</code>, the row is an archetype inferred from founder input, not a validated live-market competitor.</p>'
         + _details('Reference table', _render_table_from_rows(competitor_reference, ['name', 'type', 'icp_fit', 'channel', 'pricing', 'positioning', 'strengths', 'weaknesses', 'comparison_to_idea', 'evidence']), True)
         + _details('Competitor dossiers', ''.join(
             _details(
@@ -314,8 +311,6 @@ def export_run_to_html(run_dir: str | Path, html_path: str | Path) -> Path:
     plan_body = _details('Rendered business plan', _render_markdown(plan_md), True)
     finance_body = _details('Financial model table', _render_csv_table(finance_csv), True)
     gtm_body = _details('Rendered GTM pack', _render_markdown(gtm_md), True)
-    kb_body = _details('Knowledge base overview', _render_markdown(kb_readme), True)
-    learning_body = _details('Self-learning lessons', _render_markdown(lessons_md), True)
     meta_body = _details('Run metadata', _render_dict_list({
         'run_dir': summary.get('run_dir', run_path),
         'generated_at': summary.get('generated_at', ''),
@@ -333,8 +328,6 @@ def export_run_to_html(run_dir: str | Path, html_path: str | Path) -> Path:
         ('plan', 'Business Plan', plan_body),
         ('finance', 'Financial Model', finance_body),
         ('gtm', 'GTM', gtm_body),
-        ('kb', 'Knowledge Base', kb_body),
-        ('learning', 'Self-Learning', learning_body),
         ('meta', 'Metadata', meta_body),
     ]
 

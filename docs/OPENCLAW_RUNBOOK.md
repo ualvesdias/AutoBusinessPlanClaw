@@ -16,35 +16,10 @@ Ask for:
 - copy `config.businessclaw.example.yaml` to `config.businessclaw.yaml`
 - write questionnaire answers to `questionnaire.json`
 
-### 3. Generate (preferred OpenClaw mode)
-Enable Gateway bridge mode in config or pass the CLI flag:
-
+### 3. Generate
+Run:
 ```bash
-businessclaw run --config config.businessclaw.yaml --answers questionnaire.json --use-gateway-web-search
-```
-
-In this mode, the run calls the local OpenClaw Gateway directly during execution and uses its configured `web_search` capability.
-
-### 4. Optional fallback/debug mode: injected web research
-If you want explicit orchestration instead of direct bridge calls, OpenClaw can still collect research batches first and write them to `web_search_results.json` in this shape:
-
-```json
-{
-  "batches": {
-    "query text here": [
-      {
-        "title": "Result title",
-        "url": "https://example.com",
-        "snippet": "Short evidence snippet"
-      }
-    ]
-  }
-}
-```
-
-Then run:
-```bash
-businessclaw run --config config.businessclaw.yaml --answers questionnaire.json --use-injected-web-search --web-search-results web_search_results.json
+businessclaw run --config config.businessclaw.yaml --answers questionnaire.json
 ```
 
 ### 4. Return artifacts
@@ -90,6 +65,6 @@ The `tenth_man_report.json` file is especially important because it contains:
 8. `exports/gtm_experiments.md`
 
 ## Notes
-- If `OPENAI_API_KEY` is not available, standalone runs can still operate in fallback mode depending on provider settings.
-- When used via OpenClaw, web research should be supplied by the OpenClaw installation/orchestrator rather than by provider-specific code inside this repository.
-- The intended credential model is simple: standalone mode needs only `OPENAI_API_KEY`; OpenClaw mode should not require an extra web-search key in this project.
+- If `OPENAI_API_KEY` is not available, the tool still runs in fallback mode.
+- If `XAI_API_KEY` is available, live market search enrichment can be used.
+- This makes the repo useful both for deterministic local runs and richer research-backed runs.

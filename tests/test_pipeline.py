@@ -153,5 +153,3 @@ answers:
     assert all(row["name"] != "STALE" for row in reference_rows)
     assert "STALE EXPORT" not in (run_dir / "exports" / "competitor_reference_table.md").read_text(encoding="utf-8")
     assert "stale" not in (run_dir / "research_results.json").read_text(encoding="utf-8").lower()
-    assert (run_dir / "knowledge_base" / "README.md").exists()
-    assert (run_dir / "evolution" / "README.md").exists()

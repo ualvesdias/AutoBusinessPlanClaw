@@ -105,28 +105,15 @@ def _check_openai_compatible(config: ABCConfig) -> CheckResult:
     return CheckResult(name="openai_compatible", status="pass", detail="API direta acessível")
 
 
-def _check_web_research_mode(config: ABCConfig) -> CheckResult:
-    if not config.runtime.allow_web_research:
-        return CheckResult(name="web_research", status="pass", detail="Pesquisa web desabilitada por configuração")
-    provider = config.llm.provider.lower()
-    if config.openclaw_bridge.enabled and config.openclaw_bridge.use_gateway_web_search:
+def _check_web_search() -> CheckResult:
+    if not os.getenv("XAI_API_KEY", ""):
         return CheckResult(
-            name="web_research",
-            status="pass",
-            detail="Pesquisa web será tentada via OpenClaw Gateway bridge durante o run.",
+            name="web_search",
+            status="warn",
+            detail="XAI_API_KEY não definido; pesquisa web ficará limitada/desativada.",
+            fix="Defina XAI_API_KEY para habilitar enriquecimento web",
         )
-    if provider in {"openclaw-http", "auto"}:
-        return CheckResult(
-            name="web_research",
-            status="pass",
-            detail="Pesquisa web deve ser fornecida pelo orquestrador/OpenClaw; o projeto não embute provedor próprio.",
-        )
-    return CheckResult(
-        name="web_research",
-        status="warn",
-        detail="Sem OpenClaw/orquestrador com web search injetado, o run usará fallback local para evidências externas.",
-        fix="Use OpenClaw para busca web autônoma ou rode em modo standalone apenas com OPENAI_API_KEY e fallback local.",
-    )
+    return CheckResult(name="web_search", status="pass", detail="XAI_API_KEY presente")
 
 
 def run_doctor(config: ABCConfig) -> DoctorReport:
@@ -138,7 +125,7 @@ def run_doctor(config: ABCConfig) -> DoctorReport:
         checks.append(_check_openai_compatible(config))
     if provider == "none":
         checks.append(CheckResult(name="llm_provider", status="pass", detail="provider=none (modo controlado/local)"))
-    checks.append(_check_web_research_mode(config))
+    checks.append(_check_web_search())
     statuses = {c.status for c in checks}
     overall = "fail" if "fail" in statuses else "warn" if "warn" in statuses else "pass"
     return DoctorReport(checks=checks, overall=overall)

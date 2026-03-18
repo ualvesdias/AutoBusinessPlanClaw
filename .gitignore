@@ -5,3 +5,6 @@ artifacts/
 exports/
 .pytest_cache/
 tmp-proof/
+tmp-proof-injected/
+tmp-gateway-bridge/
+*.log

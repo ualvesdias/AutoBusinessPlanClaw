@@ -1,0 +1,35 @@
+project:
+  name: "generic-service-business"
+  mode: "full-auto"
+
+business:
+  idea: "Serviço especializado que ajuda PMEs a melhorar um processo operacional crítico com abordagem consultiva e execução enxuta"
+  region: "Brasil"
+  currency: "BRL"
+  business_model_hint: "services"
+
+runtime:
+  timezone: "America/Sao_Paulo"
+  max_web_results: 8
+  allow_web_research: true
+  critique_rounds: 2
+  pro_agent_count: 9
+  parallel_workers: 4
+  prompt_evidence_limit: 60
+  persist_full_prompts: true
+  exhaustive_mode: true
+
+llm:
+  provider: "auto"
+  base_url: "https://api.openai.com/v1"
+  api_key_env: "OPENAI_API_KEY"
+  model: "gpt-4o-mini"
+  temperature: 0.2
+  timeout_seconds: 45
+  max_completion_tokens: 16000
+  openclaw_base_url: "http://127.0.0.1:18789/v1"
+  openclaw_api_key_env: "OPENCLAW_GATEWAY_TOKEN"
+  openclaw_model: "openclaw:main"
+
+output:
+  root: "runs"

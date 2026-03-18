@@ -9,7 +9,7 @@ def test_query_builders_expand_and_dedupe():
         "current_solution": "manual whatsapp scheduling",
         "why_now": "existing tools are expensive",
         "advantage": "domain insight",
-        "mvp": "whatsapp scheduling assistant",
+        "mvp": "workflow automation software",
         "payment_reason": "saves time",
         "first_10_customers": "founder referrals",
         "early_success": "5 paying clients",

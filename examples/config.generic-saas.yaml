@@ -1,21 +1,21 @@
 project:
-  name: "whatsapp-scheduling-assistant"
+  name: "generic-b2b-saas"
   mode: "full-auto"
 
 business:
-  idea: "Plataforma web com assistente virtual via WhatsApp para profissionais liberais que trabalham com agendamento e precisam automatizar marcações, remarcações, cancelamentos e comunicação operacional com clientes."
+  idea: "Software B2B que resolve uma dor operacional recorrente com automação, visibilidade e workflow simples"
   region: "Brasil"
   currency: "BRL"
-  business_model_hint: "B2B SaaS para solo professionals"
+  business_model_hint: "B2B SaaS"
 
 runtime:
   timezone: "America/Sao_Paulo"
-  max_web_results: 10
+  max_web_results: 8
   allow_web_research: true
   critique_rounds: 2
   pro_agent_count: 9
-  parallel_workers: 6
-  prompt_evidence_limit: 80
+  parallel_workers: 4
+  prompt_evidence_limit: 60
   persist_full_prompts: true
   exhaustive_mode: true
 
@@ -25,11 +25,11 @@ llm:
   api_key_env: "OPENAI_API_KEY"
   model: "gpt-4o-mini"
   temperature: 0.2
-  timeout_seconds: 30
+  timeout_seconds: 45
   max_completion_tokens: 16000
   openclaw_base_url: "http://127.0.0.1:18789/v1"
   openclaw_api_key_env: "OPENCLAW_GATEWAY_TOKEN"
   openclaw_model: "openclaw:main"
 
 output:
-  root: "artifacts"
+  root: "runs"

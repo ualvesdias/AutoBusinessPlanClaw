@@ -1,0 +1,14 @@
+{
+  "answers": {
+    "problem": "Times perdem tempo e cometem erros porque uma tarefa importante do dia a dia ainda depende de processos manuais e ferramentas desconectadas.",
+    "icp": "Empresas B2B de pequeno e médio porte que têm dor operacional recorrente, mas não querem uma suíte enterprise pesada.",
+    "current_solution": "Planilhas, e-mail, ferramentas genéricas e trabalho manual de analistas ou operadores.",
+    "why_now": "Os times estão mais enxutos, a cobrança por produtividade aumentou e já existe maturidade suficiente para comprar software vertical mais simples.",
+    "advantage": "Foco estreito no fluxo crítico do cliente, implantação mais rápida e proposta menos complexa do que soluções horizontais grandes.",
+    "mvp": "Produto com captura de dados, automação de etapas centrais, dashboard básico e workflow de acompanhamento.",
+    "payment_reason": "O cliente paga para economizar tempo, reduzir erro operacional e ganhar previsibilidade em um processo importante.",
+    "first_10_customers": "Founder-led sales, rede própria, outreach segmentado e pilotos com escopo limitado.",
+    "early_success": "Conseguir pilotos, converter os primeiros clientes pagos e provar redução de tempo/erro no processo-alvo.",
+    "killer_risks": "A dor não ser intensa o suficiente para compra, churn inicial alto ou dificuldade de integração/adoção no workflow real."
+  }
+}
